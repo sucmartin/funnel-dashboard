@@ -131,17 +131,38 @@ export async function getCampaignBreakdown() {
   await ensureSchema();
   const db = getDb();
 
+  // Combine pageview campaigns + subscriber campaigns to show everything
   const result = await db.execute(`
     SELECT
-      COALESCE(s.utm_campaign, 'direct') as campaign,
-      COALESCE(s.utm_source, 'unknown') as source,
-      COUNT(DISTINCT s.email) as subscribers,
-      COUNT(DISTINCT p.email) as buyers,
-      COALESCE(SUM(p.amount_cents), 0) as revenue_cents
-    FROM subscribers s
-    LEFT JOIN purchases p ON s.email = p.email
-    GROUP BY s.utm_campaign, s.utm_source
-    ORDER BY subscribers DESC
+      campaign, source,
+      MAX(views) as views,
+      MAX(subscribers) as subscribers,
+      MAX(buyers) as buyers,
+      MAX(revenue_cents) as revenue_cents
+    FROM (
+      SELECT
+        COALESCE(s.utm_campaign, 'direct') as campaign,
+        COALESCE(s.utm_source, 'unknown') as source,
+        0 as views,
+        COUNT(DISTINCT s.email) as subscribers,
+        COUNT(DISTINCT p.email) as buyers,
+        COALESCE(SUM(p.amount_cents), 0) as revenue_cents
+      FROM subscribers s
+      LEFT JOIN purchases p ON s.email = p.email
+      GROUP BY s.utm_campaign, s.utm_source
+
+      UNION ALL
+
+      SELECT
+        COALESCE(utm_campaign, 'direct') as campaign,
+        COALESCE(utm_source, 'unknown') as source,
+        COUNT(*) as views,
+        0 as subscribers, 0 as buyers, 0 as revenue_cents
+      FROM pageviews
+      GROUP BY utm_campaign, utm_source
+    )
+    GROUP BY campaign, source
+    ORDER BY views DESC, subscribers DESC
   `);
 
   return result.rows.map(row => ({
