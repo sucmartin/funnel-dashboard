@@ -11,8 +11,17 @@
       background: #0f172a; color: #e2e8f0; padding: 24px; min-height: 100vh;
     }
     h1 { font-size: 24px; font-weight: 700; margin-bottom: 24px; }
+    .tabs { display: flex; gap: 8px; margin-bottom: 24px; }
+    .tab {
+      padding: 8px 16px; border-radius: 8px; border: 1px solid #334155;
+      background: #1e293b; color: #94a3b8; font-size: 13px; font-weight: 600;
+      cursor: pointer; transition: all 0.2s;
+    }
+    .tab:hover { background: #334155; color: #e2e8f0; }
+    .tab.active { background: #3b82f6; color: white; border-color: #3b82f6; }
+
     .stats-grid {
-      display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
       gap: 16px; margin-bottom: 32px;
     }
     .stat-card {
@@ -21,10 +30,12 @@
     }
     .stat-card .label { font-size: 13px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; }
     .stat-card .value { font-size: 32px; font-weight: 700; margin-top: 4px; }
+    .stat-card .sub { font-size: 12px; color: #64748b; margin-top: 2px; }
     .stat-card .value.green { color: #4ade80; }
     .stat-card .value.blue { color: #60a5fa; }
     .stat-card .value.purple { color: #c084fc; }
     .stat-card .value.amber { color: #fbbf24; }
+    .stat-card .value.rose { color: #fb7185; }
 
     .section { margin-bottom: 32px; }
     .section h2 { font-size: 18px; font-weight: 600; margin-bottom: 12px; }
@@ -42,6 +53,8 @@
     .badge-green { background: #166534; color: #4ade80; }
     .badge-blue { background: #1e3a5f; color: #60a5fa; }
     .badge-purple { background: #3b1764; color: #c084fc; }
+    .badge-amber { background: #713f12; color: #fbbf24; }
+    .badge-rose { background: #4c0519; color: #fb7185; }
 
     .chart-container {
       background: #1e293b; border-radius: 12px; padding: 20px;
@@ -80,9 +93,61 @@
     }
     .refresh-btn:hover { background: #334155; color: #e2e8f0; }
 
+    /* UTM Generator */
+    .utm-gen {
+      background: #1e293b; border-radius: 12px; padding: 24px;
+      border: 1px solid #334155; max-width: 640px;
+    }
+    .utm-gen label { display: block; font-size: 13px; color: #94a3b8; margin-bottom: 4px; margin-top: 16px; }
+    .utm-gen label:first-child { margin-top: 0; }
+    .utm-gen input, .utm-gen select {
+      width: 100%; padding: 10px 14px; border-radius: 8px; border: 1px solid #334155;
+      background: #0f172a; color: #e2e8f0; font-size: 14px;
+    }
+    .utm-gen select { appearance: auto; }
+    .utm-output {
+      margin-top: 20px; padding: 14px; background: #0f172a; border-radius: 8px;
+      border: 1px solid #334155; font-family: monospace; font-size: 13px;
+      word-break: break-all; color: #4ade80; position: relative;
+    }
+    .copy-btn {
+      position: absolute; top: 8px; right: 8px; padding: 4px 12px; border-radius: 6px;
+      border: 1px solid #334155; background: #1e293b; color: #94a3b8;
+      font-size: 11px; cursor: pointer;
+    }
+    .copy-btn:hover { background: #334155; color: #e2e8f0; }
+    .copy-btn.copied { background: #166534; color: #4ade80; border-color: #166534; }
+    .utm-history { margin-top: 16px; }
+    .utm-history h3 { font-size: 14px; color: #94a3b8; margin-bottom: 8px; }
+    .utm-link-item {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 8px 12px; background: #0f172a; border-radius: 6px; margin-bottom: 4px;
+      font-size: 12px; border: 1px solid #334155;
+    }
+    .utm-link-item .campaign { color: #c084fc; font-weight: 600; }
+    .utm-link-item .link { color: #64748b; font-family: monospace; }
+    .utm-link-item .copy-sm {
+      padding: 2px 8px; border-radius: 4px; border: 1px solid #334155;
+      background: #1e293b; color: #94a3b8; font-size: 10px; cursor: pointer; white-space: nowrap;
+    }
+    .utm-link-item .copy-sm:hover { background: #334155; }
+
+    /* Funnel visualization */
+    .funnel { display: flex; align-items: center; gap: 8px; margin-bottom: 24px; flex-wrap: wrap; }
+    .funnel-step {
+      background: #1e293b; border-radius: 8px; padding: 12px 20px; text-align: center;
+      border: 1px solid #334155; min-width: 120px;
+    }
+    .funnel-step .step-label { font-size: 11px; color: #94a3b8; text-transform: uppercase; }
+    .funnel-step .step-value { font-size: 24px; font-weight: 700; margin-top: 2px; }
+    .funnel-arrow { color: #334155; font-size: 20px; }
+    .funnel-rate { font-size: 11px; color: #fbbf24; text-align: center; }
+
     @media (max-width: 640px) {
       body { padding: 12px; }
       .stat-card .value { font-size: 24px; }
+      .funnel { flex-direction: column; }
+      .funnel-arrow { transform: rotate(90deg); }
     }
   </style>
 </head>
@@ -93,7 +158,12 @@
 
   <script>
     const API_BASE = window.location.origin;
-    let secret = localStorage.getItem('dashboard_secret') || '';
+    let secret = localStorage.getItem('dashboard_secret') || new URLSearchParams(window.location.search).get('secret') || '';
+    let currentTab = 'dashboard';
+
+    if (secret && !localStorage.getItem('dashboard_secret')) {
+      localStorage.setItem('dashboard_secret', secret);
+    }
 
     function qs(s) { return secret ? `${s}${s.includes('?') ? '&' : '?'}secret=${encodeURIComponent(secret)}` : s; }
 
@@ -123,8 +193,24 @@
       loadDashboard();
     }
 
+    function switchTab(tab) {
+      currentTab = tab;
+      if (tab === 'dashboard') loadDashboard();
+      else if (tab === 'links') showLinkGenerator();
+    }
+
+    function renderTabs() {
+      return `
+        <div class="tabs">
+          <div class="tab ${currentTab === 'dashboard' ? 'active' : ''}" onclick="switchTab('dashboard')">Dashboard</div>
+          <div class="tab ${currentTab === 'links' ? 'active' : ''}" onclick="switchTab('links')">UTM Link Generator</div>
+        </div>
+      `;
+    }
+
     async function loadDashboard() {
-      document.getElementById('app').innerHTML = '<div class="loading">Loading dashboard...</div>';
+      currentTab = 'dashboard';
+      document.getElementById('app').innerHTML = renderTabs() + '<div class="loading">Loading dashboard...</div>';
 
       try {
         const [stats, campaigns, activity, pageviews] = await Promise.all([
@@ -134,21 +220,26 @@
           apiFetch('/api/dashboard/pageviews'),
         ]);
 
-        render(stats, campaigns, activity, pageviews);
+        renderDashboard(stats, campaigns, activity, pageviews);
       } catch (err) {
         if (err.message !== 'Unauthorized') {
-          document.getElementById('app').innerHTML = `<div class="error">Failed to load: ${err.message}</div>`;
+          document.getElementById('app').innerHTML = renderTabs() + `<div class="error">Failed to load: ${err.message}</div>`;
         }
       }
     }
 
-    function render(stats, campaigns, activity, pageviews) {
+    function renderDashboard(stats, campaigns, activity, pageviews) {
       const maxViews = Math.max(...pageviews.map(d => d.views), 1);
       const bars = pageviews.map(d =>
         `<div class="chart-bar" style="height:${Math.max((d.views/maxViews)*100, 2)}%" title="${d.day}: ${d.views} views"></div>`
       ).join('');
       const firstDay = pageviews.length > 0 ? pageviews[0].day : '';
       const lastDay = pageviews.length > 0 ? pageviews[pageviews.length - 1].day : '';
+
+      // Conversion rates
+      const optinRate = stats.totalPageviews > 0 ? ((stats.totalSubscribers / stats.totalPageviews) * 100).toFixed(1) : '0';
+      const purchaseRate = stats.totalSubscribers > 0 ? ((stats.totalPurchases / stats.totalSubscribers) * 100).toFixed(1) : '0';
+      const revenuePerSub = stats.totalSubscribers > 0 ? (stats.totalRevenue / stats.totalSubscribers).toFixed(2) : '0.00';
 
       const campaignRows = campaigns.length > 0 ? campaigns.map(c => `
         <tr>
@@ -159,36 +250,73 @@
           <td>$${c.revenue.toFixed(2)}</td>
           <td>${c.conversionRate}</td>
         </tr>
-      `).join('') : '<tr><td colspan="6" style="text-align:center;color:#64748b;padding:24px;">No campaign data yet. Subscribers will appear here once people opt in.</td></tr>';
+      `).join('') : '<tr><td colspan="6" style="text-align:center;color:#64748b;padding:24px;">No campaign data yet.</td></tr>';
 
-      const activityRows = activity.length > 0 ? activity.map(a => `
+      const activityRows = activity.length > 0 ? activity.slice(0, 15).map(a => {
+        const badgeClass = a.event === 'optin_submit' ? 'badge-green' : a.event === 'purchase' ? 'badge-amber' : 'badge-blue';
+        return `
         <tr>
-          <td><span class="badge badge-green">${a.event}</span></td>
+          <td><span class="badge ${badgeClass}">${a.event}</span></td>
           <td>${a.visitor}</td>
           <td>${a.email || '-'}</td>
           <td>${new Date(a.time + 'Z').toLocaleString()}</td>
         </tr>
-      `).join('') : '<tr><td colspan="4" style="text-align:center;color:#64748b;padding:24px;">No events yet. Activity will appear as visitors interact with your funnel.</td></tr>';
+      `}).join('') : '<tr><td colspan="4" style="text-align:center;color:#64748b;padding:24px;">No events yet.</td></tr>';
 
       document.getElementById('app').innerHTML = `
+        ${renderTabs()}
         <h1>Funnel Dashboard <button class="refresh-btn" onclick="loadDashboard()">Refresh</button></h1>
+
+        <div class="funnel">
+          <div class="funnel-step">
+            <div class="step-label">Pageviews</div>
+            <div class="step-value" style="color:#60a5fa">${stats.totalPageviews.toLocaleString()}</div>
+          </div>
+          <div>
+            <div class="funnel-arrow">&rarr;</div>
+            <div class="funnel-rate">${optinRate}%</div>
+          </div>
+          <div class="funnel-step">
+            <div class="step-label">Subscribers</div>
+            <div class="step-value" style="color:#4ade80">${stats.totalSubscribers.toLocaleString()}</div>
+          </div>
+          <div>
+            <div class="funnel-arrow">&rarr;</div>
+            <div class="funnel-rate">${purchaseRate}%</div>
+          </div>
+          <div class="funnel-step">
+            <div class="step-label">Purchases</div>
+            <div class="step-value" style="color:#c084fc">${stats.totalPurchases.toLocaleString()}</div>
+          </div>
+          <div>
+            <div class="funnel-arrow">&rarr;</div>
+          </div>
+          <div class="funnel-step">
+            <div class="step-label">Revenue</div>
+            <div class="step-value" style="color:#fbbf24">$${stats.totalRevenue.toLocaleString(undefined, {minimumFractionDigits: 2})}</div>
+          </div>
+        </div>
 
         <div class="stats-grid">
           <div class="stat-card">
-            <div class="label">Pageviews</div>
-            <div class="value blue">${stats.totalPageviews.toLocaleString()}</div>
+            <div class="label">Opt-in Rate</div>
+            <div class="value green">${optinRate}%</div>
+            <div class="sub">pageview &rarr; subscriber</div>
           </div>
           <div class="stat-card">
-            <div class="label">Subscribers</div>
-            <div class="value green">${stats.totalSubscribers.toLocaleString()}</div>
+            <div class="label">Purchase Rate</div>
+            <div class="value purple">${purchaseRate}%</div>
+            <div class="sub">subscriber &rarr; buyer</div>
           </div>
           <div class="stat-card">
-            <div class="label">Purchases</div>
-            <div class="value purple">${stats.totalPurchases.toLocaleString()}</div>
+            <div class="label">Revenue / Subscriber</div>
+            <div class="value amber">$${revenuePerSub}</div>
+            <div class="sub">lifetime value</div>
           </div>
           <div class="stat-card">
-            <div class="label">Revenue</div>
-            <div class="value amber">$${stats.totalRevenue.toLocaleString(undefined, {minimumFractionDigits: 2})}</div>
+            <div class="label">Total Events</div>
+            <div class="value blue">${stats.totalEvents.toLocaleString()}</div>
+            <div class="sub">all tracked actions</div>
           </div>
         </div>
 
@@ -201,7 +329,7 @@
         </div>
 
         <div class="section">
-          <h2>Campaign Breakdown</h2>
+          <h2>Campaign Performance</h2>
           <table>
             <thead><tr><th>Campaign</th><th>Source</th><th>Subscribers</th><th>Buyers</th><th>Revenue</th><th>Conv. Rate</th></tr></thead>
             <tbody>${campaignRows}</tbody>
@@ -216,6 +344,105 @@
           </table>
         </div>
       `;
+    }
+
+    // ---- UTM Link Generator ----
+    const SITE_URL = 'https://goddardsecrets.com/';
+
+    function getUtmHistory() {
+      try { return JSON.parse(localStorage.getItem('utm_history') || '[]'); } catch(e) { return []; }
+    }
+    function saveUtmHistory(list) {
+      localStorage.setItem('utm_history', JSON.stringify(list.slice(0, 20)));
+    }
+
+    function showLinkGenerator() {
+      currentTab = 'links';
+      const history = getUtmHistory();
+      const historyHtml = history.length > 0 ? history.map(h => `
+        <div class="utm-link-item">
+          <span class="campaign">${h.campaign}</span>
+          <span class="link">${h.url.replace(SITE_URL, '').substring(0, 50)}</span>
+          <button class="copy-sm" onclick="copyText('${h.url}', this)">Copy</button>
+        </div>
+      `).join('') : '<div style="color:#64748b;font-size:13px;">No links generated yet.</div>';
+
+      document.getElementById('app').innerHTML = `
+        ${renderTabs()}
+        <h1>UTM Link Generator</h1>
+        <div class="utm-gen">
+          <label>Video Topic / Campaign Name</label>
+          <input type="text" id="utm-campaign" placeholder="e.g. revision-technique, sleep-manifestation" oninput="updateUtmPreview()" />
+
+          <label>Source</label>
+          <select id="utm-source" onchange="updateUtmPreview()">
+            <option value="youtube">YouTube</option>
+            <option value="instagram">Instagram</option>
+            <option value="tiktok">TikTok</option>
+            <option value="twitter">Twitter / X</option>
+            <option value="facebook">Facebook</option>
+            <option value="email">Email</option>
+            <option value="other">Other</option>
+          </select>
+
+          <label>Medium (optional)</label>
+          <select id="utm-medium">
+            <option value="">-- auto --</option>
+            <option value="organic">Organic</option>
+            <option value="paid">Paid</option>
+            <option value="link">Link in bio</option>
+            <option value="description">Video description</option>
+          </select>
+
+          <div class="utm-output" id="utm-output" style="display:none;">
+            <span id="utm-url"></span>
+            <button class="copy-btn" id="utm-copy-btn" onclick="copyGeneratedLink()">Copy</button>
+          </div>
+        </div>
+
+        <div class="utm-history" style="max-width:640px;margin-top:24px;">
+          <h3>Recent Links</h3>
+          ${historyHtml}
+        </div>
+      `;
+    }
+
+    function updateUtmPreview() {
+      const campaign = document.getElementById('utm-campaign').value.trim().toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-');
+      const source = document.getElementById('utm-source').value;
+      const medium = document.getElementById('utm-medium')?.value || '';
+
+      if (!campaign) {
+        document.getElementById('utm-output').style.display = 'none';
+        return;
+      }
+
+      let url = SITE_URL + '?utm_source=' + source + '&utm_campaign=' + campaign;
+      if (medium) url += '&utm_medium=' + medium;
+
+      document.getElementById('utm-url').textContent = url;
+      document.getElementById('utm-output').style.display = 'block';
+
+      // Save to history on generation
+      const history = getUtmHistory();
+      if (!history.find(h => h.url === url)) {
+        history.unshift({ campaign, source, url, created: new Date().toISOString() });
+        saveUtmHistory(history);
+      }
+    }
+
+    function copyGeneratedLink() {
+      const url = document.getElementById('utm-url').textContent;
+      copyText(url, document.getElementById('utm-copy-btn'));
+    }
+
+    function copyText(text, btn) {
+      navigator.clipboard.writeText(text).then(() => {
+        const orig = btn.textContent;
+        btn.textContent = 'Copied!';
+        btn.classList.add('copied');
+        setTimeout(() => { btn.textContent = orig; btn.classList.remove('copied'); }, 2000);
+      });
     }
 
     // Boot
