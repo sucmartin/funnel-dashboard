@@ -174,6 +174,57 @@ export async function getRecentActivity(limit = 20) {
   }));
 }
 
+export async function getSubscribersByDay(days = 30) {
+  await ensureSchema();
+  const db = getDb();
+  const result = await db.execute({
+    sql: `SELECT DATE(subscribed_at) as day, COUNT(*) as count
+          FROM subscribers
+          WHERE subscribed_at >= datetime('now', ? || ' days')
+          GROUP BY DATE(subscribed_at)
+          ORDER BY day ASC`,
+    args: [`-${days}`],
+  });
+  return result.rows.map(row => ({
+    day: row.day as string,
+    count: Number(row.count),
+  }));
+}
+
+export async function getRevenueByDay(days = 30) {
+  await ensureSchema();
+  const db = getDb();
+  const result = await db.execute({
+    sql: `SELECT DATE(purchased_at) as day, SUM(amount_cents) as revenue_cents, COUNT(*) as count
+          FROM purchases
+          WHERE purchased_at >= datetime('now', ? || ' days')
+          GROUP BY DATE(purchased_at)
+          ORDER BY day ASC`,
+    args: [`-${days}`],
+  });
+  return result.rows.map(row => ({
+    day: row.day as string,
+    revenue: Number(row.revenue_cents) / 100,
+    count: Number(row.count),
+  }));
+}
+
+export async function getCampaignPageviews() {
+  await ensureSchema();
+  const db = getDb();
+  const result = await db.execute(`
+    SELECT COALESCE(utm_campaign, 'direct') as campaign, COUNT(*) as views
+    FROM pageviews
+    WHERE utm_campaign IS NOT NULL AND utm_campaign != ''
+    GROUP BY utm_campaign
+    ORDER BY views DESC
+  `);
+  return result.rows.map(row => ({
+    campaign: row.campaign as string,
+    views: Number(row.views),
+  }));
+}
+
 export async function getPageviewsByDay(days = 30) {
   await ensureSchema();
   const db = getDb();

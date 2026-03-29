@@ -5,546 +5,415 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Funnel Dashboard</title>
   <style>
+    :root {
+      --bg: #0a0e1a; --surface: #111827; --surface2: #1a2236; --border: #1f2b3d;
+      --text: #e2e8f0; --text2: #94a3b8; --text3: #64748b;
+      --blue: #3b82f6; --green: #22c55e; --purple: #a855f7; --amber: #f59e0b;
+      --rose: #f43f5e; --cyan: #06b6d4;
+      --radius: 12px;
+    }
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      background: #0f172a; color: #e2e8f0; padding: 24px; min-height: 100vh;
-    }
-    h1 { font-size: 24px; font-weight: 700; margin-bottom: 24px; }
-    .tabs { display: flex; gap: 8px; margin-bottom: 24px; }
-    .tab {
-      padding: 8px 16px; border-radius: 8px; border: 1px solid #334155;
-      background: #1e293b; color: #94a3b8; font-size: 13px; font-weight: 600;
-      cursor: pointer; transition: all 0.2s;
-    }
-    .tab:hover { background: #334155; color: #e2e8f0; }
-    .tab.active { background: #3b82f6; color: white; border-color: #3b82f6; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
 
-    .stats-grid {
-      display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-      gap: 16px; margin-bottom: 32px;
+    /* Layout */
+    .shell { display: flex; min-height: 100vh; }
+    .sidebar {
+      width: 220px; background: var(--surface); border-right: 1px solid var(--border);
+      padding: 24px 0; flex-shrink: 0; position: fixed; height: 100vh; overflow-y: auto;
     }
-    .stat-card {
-      background: #1e293b; border-radius: 12px; padding: 20px;
-      border: 1px solid #334155;
+    .sidebar .logo { padding: 0 20px 24px; font-size: 15px; font-weight: 700; color: var(--text); letter-spacing: -0.3px; }
+    .sidebar .logo span { color: var(--blue); }
+    .nav-item {
+      display: flex; align-items: center; gap: 10px; padding: 10px 20px; font-size: 13px;
+      color: var(--text2); cursor: pointer; transition: all 0.15s; border-left: 3px solid transparent;
     }
-    .stat-card .label { font-size: 13px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; }
-    .stat-card .value { font-size: 32px; font-weight: 700; margin-top: 4px; }
-    .stat-card .sub { font-size: 12px; color: #64748b; margin-top: 2px; }
-    .stat-card .value.green { color: #4ade80; }
-    .stat-card .value.blue { color: #60a5fa; }
-    .stat-card .value.purple { color: #c084fc; }
-    .stat-card .value.amber { color: #fbbf24; }
-    .stat-card .value.rose { color: #fb7185; }
+    .nav-item:hover { color: var(--text); background: var(--surface2); }
+    .nav-item.active { color: var(--text); background: var(--surface2); border-left-color: var(--blue); }
+    .nav-item svg { width: 16px; height: 16px; opacity: 0.7; }
+    .nav-item.active svg { opacity: 1; }
+    .nav-sep { height: 1px; background: var(--border); margin: 12px 20px; }
+    .main { margin-left: 220px; flex: 1; padding: 28px 32px; max-width: 1200px; }
 
-    .section { margin-bottom: 32px; }
-    .section h2 { font-size: 18px; font-weight: 600; margin-bottom: 12px; }
+    /* Header */
+    .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 28px; }
+    .page-header h1 { font-size: 22px; font-weight: 700; letter-spacing: -0.3px; }
+    .header-actions { display: flex; gap: 8px; }
+    .btn {
+      padding: 7px 14px; border-radius: 8px; border: 1px solid var(--border);
+      background: var(--surface); color: var(--text2); font-size: 12px; font-weight: 500;
+      cursor: pointer; transition: all 0.15s;
+    }
+    .btn:hover { background: var(--surface2); color: var(--text); }
+    .btn-primary { background: var(--blue); color: white; border-color: var(--blue); }
+    .btn-primary:hover { opacity: 0.9; }
 
-    table { width: 100%; border-collapse: collapse; background: #1e293b; border-radius: 12px; overflow: hidden; }
-    th { text-align: left; padding: 12px 16px; font-size: 12px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid #334155; }
-    td { padding: 12px 16px; font-size: 14px; border-bottom: 1px solid #1e293b; }
-    tr:nth-child(even) td { background: #162032; }
-    tr:hover td { background: #1e3a5f; }
+    /* Cards */
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; }
+    .stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 24px; }
+    .stat { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px 20px; }
+    .stat .label { font-size: 11px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.8px; font-weight: 600; }
+    .stat .val { font-size: 28px; font-weight: 700; margin-top: 4px; line-height: 1; }
+    .stat .sub { font-size: 11px; color: var(--text3); margin-top: 4px; }
 
-    .badge {
-      display: inline-block; padding: 2px 8px; border-radius: 9999px;
+    /* Funnel bar */
+    .funnel-bar {
+      display: flex; align-items: center; gap: 0; margin-bottom: 24px;
+      background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+      padding: 16px 20px; overflow-x: auto;
+    }
+    .fb-step { text-align: center; flex: 1; min-width: 100px; }
+    .fb-step .fb-val { font-size: 22px; font-weight: 700; }
+    .fb-step .fb-label { font-size: 10px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.5px; margin-top: 2px; }
+    .fb-arrow { color: var(--text3); font-size: 12px; padding: 0 6px; text-align: center; }
+    .fb-arrow .fb-rate { color: var(--amber); font-weight: 600; font-size: 11px; }
+
+    /* Chart */
+    .chart-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; margin-bottom: 24px; }
+    .chart-card h3 { font-size: 13px; font-weight: 600; color: var(--text2); margin-bottom: 12px; }
+    .chart-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
+    .mini-chart { height: 120px; display: flex; align-items: flex-end; gap: 1px; }
+    .mini-bar { flex: 1; border-radius: 2px 2px 0 0; min-width: 2px; transition: opacity 0.15s; cursor: default; }
+    .mini-bar:hover { opacity: 0.8; }
+    .chart-footer { display: flex; justify-content: space-between; font-size: 10px; color: var(--text3); margin-top: 4px; }
+
+    /* Table */
+    .table-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; margin-bottom: 24px; }
+    .table-card h3 { font-size: 13px; font-weight: 600; color: var(--text2); padding: 16px 20px 0; }
+    table { width: 100%; border-collapse: collapse; }
+    th { text-align: left; padding: 10px 20px; font-size: 10px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.8px; font-weight: 600; border-bottom: 1px solid var(--border); }
+    td { padding: 10px 20px; font-size: 13px; border-bottom: 1px solid var(--border); }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: rgba(59,130,246,0.04); }
+    .tag {
+      display: inline-block; padding: 2px 8px; border-radius: 6px;
       font-size: 11px; font-weight: 600;
     }
-    .badge-green { background: #166534; color: #4ade80; }
-    .badge-blue { background: #1e3a5f; color: #60a5fa; }
-    .badge-purple { background: #3b1764; color: #c084fc; }
-    .badge-amber { background: #713f12; color: #fbbf24; }
-    .badge-rose { background: #4c0519; color: #fb7185; }
+    .tag-blue { background: rgba(59,130,246,0.15); color: #60a5fa; }
+    .tag-green { background: rgba(34,197,94,0.15); color: #4ade80; }
+    .tag-purple { background: rgba(168,85,247,0.15); color: #c084fc; }
+    .tag-amber { background: rgba(245,158,11,0.15); color: #fbbf24; }
+    .tag-rose { background: rgba(244,63,94,0.15); color: #fb7185; }
+    .empty-state { text-align: center; padding: 32px; color: var(--text3); font-size: 13px; }
 
-    .chart-container {
-      background: #1e293b; border-radius: 12px; padding: 20px;
-      border: 1px solid #334155; height: 200px; position: relative;
-    }
-    .chart-bar-row { display: flex; align-items: flex-end; height: 160px; gap: 2px; padding-top: 10px; }
-    .chart-bar {
-      flex: 1; background: #3b82f6; border-radius: 3px 3px 0 0;
-      min-width: 4px; transition: background 0.2s; position: relative;
-    }
-    .chart-bar:hover { background: #60a5fa; }
-    .chart-labels { display: flex; justify-content: space-between; margin-top: 4px; font-size: 10px; color: #64748b; }
-
-    .loading { text-align: center; padding: 40px; color: #64748b; }
-    .error { text-align: center; padding: 40px; color: #f87171; }
-
-    .auth-form {
-      max-width: 360px; margin: 100px auto; background: #1e293b;
-      padding: 32px; border-radius: 12px; border: 1px solid #334155;
-    }
-    .auth-form h2 { margin-bottom: 16px; text-align: center; }
-    .auth-form input {
-      width: 100%; padding: 10px 14px; border-radius: 8px; border: 1px solid #334155;
-      background: #0f172a; color: #e2e8f0; font-size: 14px; margin-bottom: 12px;
-    }
-    .auth-form button {
-      width: 100%; padding: 10px; border-radius: 8px; border: none;
-      background: #3b82f6; color: white; font-size: 14px; font-weight: 600;
-      cursor: pointer;
-    }
-    .auth-form button:hover { background: #2563eb; }
-
-    .refresh-btn {
-      float: right; padding: 6px 14px; border-radius: 8px; border: 1px solid #334155;
-      background: #1e293b; color: #94a3b8; font-size: 12px; cursor: pointer;
-    }
-    .refresh-btn:hover { background: #334155; color: #e2e8f0; }
+    /* Video cards */
+    .video-row { display: flex; gap: 14px; align-items: center; padding: 12px 20px; border-bottom: 1px solid var(--border); }
+    .video-row:last-child { border-bottom: none; }
+    .video-row:hover { background: rgba(59,130,246,0.04); }
+    .video-row img { width: 120px; height: 68px; border-radius: 6px; object-fit: cover; flex-shrink: 0; }
+    .video-row .vid-info { flex: 1; min-width: 0; }
+    .video-row .vid-title { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .video-row .vid-title a { color: var(--text); text-decoration: none; }
+    .video-row .vid-title a:hover { color: var(--blue); }
+    .video-row .vid-meta { display: flex; gap: 14px; margin-top: 4px; font-size: 11px; color: var(--text3); }
+    .video-row .vid-meta span b { color: var(--text2); font-weight: 600; }
 
     /* UTM Generator */
-    .utm-gen {
-      background: #1e293b; border-radius: 12px; padding: 24px;
-      border: 1px solid #334155; max-width: 640px;
-    }
-    .utm-gen label { display: block; font-size: 13px; color: #94a3b8; margin-bottom: 4px; margin-top: 16px; }
+    .utm-gen { max-width: 560px; }
+    .utm-gen label { display: block; font-size: 12px; color: var(--text3); margin-bottom: 4px; margin-top: 14px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
     .utm-gen label:first-child { margin-top: 0; }
     .utm-gen input, .utm-gen select {
-      width: 100%; padding: 10px 14px; border-radius: 8px; border: 1px solid #334155;
-      background: #0f172a; color: #e2e8f0; font-size: 14px;
+      width: 100%; padding: 10px 14px; border-radius: 8px; border: 1px solid var(--border);
+      background: var(--bg); color: var(--text); font-size: 14px;
     }
     .utm-gen select { appearance: auto; }
     .utm-output {
-      margin-top: 20px; padding: 14px; background: #0f172a; border-radius: 8px;
-      border: 1px solid #334155; font-family: monospace; font-size: 13px;
-      word-break: break-all; color: #4ade80; position: relative;
+      margin-top: 18px; padding: 14px 48px 14px 14px; background: var(--bg); border-radius: 8px;
+      border: 1px solid var(--border); font-family: monospace; font-size: 13px;
+      word-break: break-all; color: var(--green); position: relative;
     }
     .copy-btn {
-      position: absolute; top: 8px; right: 8px; padding: 4px 12px; border-radius: 6px;
-      border: 1px solid #334155; background: #1e293b; color: #94a3b8;
+      position: absolute; top: 10px; right: 10px; padding: 4px 10px; border-radius: 6px;
+      border: 1px solid var(--border); background: var(--surface); color: var(--text2);
       font-size: 11px; cursor: pointer;
     }
-    .copy-btn:hover { background: #334155; color: #e2e8f0; }
-    .copy-btn.copied { background: #166534; color: #4ade80; border-color: #166534; }
-    .utm-history { margin-top: 16px; }
-    .utm-history h3 { font-size: 14px; color: #94a3b8; margin-bottom: 8px; }
-    .utm-link-item {
+    .copy-btn:hover { background: var(--surface2); color: var(--text); }
+    .copy-btn.copied { background: rgba(34,197,94,0.2); color: var(--green); border-color: rgba(34,197,94,0.3); }
+    .utm-history-item {
       display: flex; justify-content: space-between; align-items: center;
-      padding: 8px 12px; background: #0f172a; border-radius: 6px; margin-bottom: 4px;
-      font-size: 12px; border: 1px solid #334155;
+      padding: 8px 12px; background: var(--bg); border-radius: 6px; margin-bottom: 4px;
+      font-size: 12px; border: 1px solid var(--border);
     }
-    .utm-link-item .campaign { color: #c084fc; font-weight: 600; }
-    .utm-link-item .link { color: #64748b; font-family: monospace; }
-    .utm-link-item .copy-sm {
-      padding: 2px 8px; border-radius: 4px; border: 1px solid #334155;
-      background: #1e293b; color: #94a3b8; font-size: 10px; cursor: pointer; white-space: nowrap;
-    }
-    .utm-link-item .copy-sm:hover { background: #334155; }
+    .utm-history-item .camp { color: var(--purple); font-weight: 600; min-width: 120px; }
+    .utm-history-item .lnk { color: var(--text3); font-family: monospace; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin: 0 12px; }
 
-    /* Funnel visualization */
-    .funnel { display: flex; align-items: center; gap: 8px; margin-bottom: 24px; flex-wrap: wrap; }
-    .funnel-step {
-      background: #1e293b; border-radius: 8px; padding: 12px 20px; text-align: center;
-      border: 1px solid #334155; min-width: 120px;
+    /* Auth */
+    .auth-form {
+      max-width: 340px; margin: 120px auto; background: var(--surface);
+      padding: 32px; border-radius: var(--radius); border: 1px solid var(--border);
     }
-    .funnel-step .step-label { font-size: 11px; color: #94a3b8; text-transform: uppercase; }
-    .funnel-step .step-value { font-size: 24px; font-weight: 700; margin-top: 2px; }
-    .funnel-arrow { color: #334155; font-size: 20px; }
-    .funnel-rate { font-size: 11px; color: #fbbf24; text-align: center; }
+    .auth-form h2 { margin-bottom: 16px; text-align: center; font-size: 18px; }
+    .auth-form input {
+      width: 100%; padding: 10px 14px; border-radius: 8px; border: 1px solid var(--border);
+      background: var(--bg); color: var(--text); font-size: 14px; margin-bottom: 12px;
+    }
+    .auth-form button { width: 100%; }
 
-    /* YouTube */
-    .video-card {
-      display: flex; gap: 16px; background: #1e293b; border-radius: 12px;
-      padding: 16px; border: 1px solid #334155; margin-bottom: 12px;
-    }
-    .video-card img { width: 160px; height: 90px; border-radius: 8px; object-fit: cover; flex-shrink: 0; }
-    .video-info { flex: 1; min-width: 0; }
-    .video-info .video-title {
-      font-size: 14px; font-weight: 600; margin-bottom: 6px;
-      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    }
-    .video-info .video-title a { color: #e2e8f0; text-decoration: none; }
-    .video-info .video-title a:hover { color: #60a5fa; }
-    .video-stats { display: flex; gap: 16px; flex-wrap: wrap; }
-    .video-stat { font-size: 12px; color: #94a3b8; }
-    .video-stat span { font-weight: 700; color: #e2e8f0; }
-    .yt-channel-stats { display: flex; gap: 24px; margin-bottom: 24px; flex-wrap: wrap; }
-    .yt-channel-stat {
-      background: #1e293b; border-radius: 8px; padding: 12px 20px;
-      border: 1px solid #334155; text-align: center; min-width: 140px;
-    }
-    .yt-channel-stat .yt-label { font-size: 11px; color: #94a3b8; text-transform: uppercase; }
-    .yt-channel-stat .yt-val { font-size: 22px; font-weight: 700; color: #fb7185; margin-top: 2px; }
+    .loading { text-align: center; padding: 60px; color: var(--text3); }
+    .error { text-align: center; padding: 60px; color: var(--rose); }
 
-    @media (max-width: 640px) {
-      body { padding: 12px; }
-      .stat-card .value { font-size: 24px; }
-      .funnel { flex-direction: column; }
-      .video-card { flex-direction: column; }
-      .video-card img { width: 100%; height: auto; }
-      .funnel-arrow { transform: rotate(90deg); }
+    @media (max-width: 768px) {
+      .sidebar { display: none; }
+      .main { margin-left: 0; padding: 16px; }
+      .chart-row { grid-template-columns: 1fr; }
+      .video-row img { width: 80px; height: 45px; }
+      .stats-row { grid-template-columns: repeat(2, 1fr); }
     }
   </style>
 </head>
 <body>
-  <div id="app">
-    <div class="loading">Loading dashboard...</div>
-  </div>
+  <div id="app"><div class="loading">Loading...</div></div>
 
   <script>
-    const API_BASE = window.location.origin;
-    let secret = localStorage.getItem('dashboard_secret') || new URLSearchParams(window.location.search).get('secret') || '';
-    let currentTab = 'dashboard';
+    const API = window.location.origin;
+    let secret = localStorage.getItem('ds') || new URLSearchParams(window.location.search).get('secret') || '';
+    if (secret) localStorage.setItem('ds', secret);
+    let tab = 'overview';
 
-    if (secret && !localStorage.getItem('dashboard_secret')) {
-      localStorage.setItem('dashboard_secret', secret);
-    }
-
-    function qs(s) { return secret ? `${s}${s.includes('?') ? '&' : '?'}secret=${encodeURIComponent(secret)}` : s; }
-
-    async function apiFetch(path) {
-      const res = await fetch(qs(`${API_BASE}${path}`));
-      if (res.status === 401) { showAuth(); throw new Error('Unauthorized'); }
-      if (!res.ok) throw new Error(`API error: ${res.status}`);
-      return res.json();
+    function qs(s) { return secret ? `${s}${s.includes('?')?'&':'?'}secret=${encodeURIComponent(secret)}` : s; }
+    async function api(path) {
+      const r = await fetch(qs(`${API}${path}`));
+      if (r.status === 401) { showAuth(); throw new Error('auth'); }
+      if (!r.ok) throw new Error(r.status);
+      return r.json();
     }
 
     function showAuth() {
       document.getElementById('app').innerHTML = `
         <div class="auth-form">
-          <h2>Dashboard Access</h2>
-          <input type="password" id="secret-input" placeholder="Enter dashboard secret" autofocus />
-          <button onclick="submitSecret()">Unlock</button>
+          <h2>Dashboard</h2>
+          <input type="password" id="si" placeholder="Enter secret" autofocus />
+          <button class="btn btn-primary" onclick="doAuth()">Unlock</button>
+        </div>`;
+      document.getElementById('si').addEventListener('keydown', e => { if(e.key==='Enter') doAuth(); });
+    }
+    function doAuth() { secret=document.getElementById('si').value; localStorage.setItem('ds',secret); go('overview'); }
+
+    // Icons (inline SVG)
+    const icons = {
+      overview: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>',
+      youtube: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22.54 6.42a2.78 2.78 0 00-1.94-2C18.88 4 12 4 12 4s-6.88 0-8.6.46a2.78 2.78 0 00-1.94 2A29 29 0 001 11.75a29 29 0 00.46 5.33A2.78 2.78 0 003.4 19.1c1.72.46 8.6.46 8.6.46s6.88 0 8.6-.46a2.78 2.78 0 001.94-2 29 29 0 00.46-5.25 29 29 0 00-.46-5.33z"/><polygon points="9.75 15.02 15.5 11.75 9.75 8.48 9.75 15.02" fill="currentColor" stroke="none"/></svg>',
+      link: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>',
+      activity: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>',
+    };
+
+    function shell(content) {
+      return `<div class="shell">
+        <div class="sidebar">
+          <div class="logo">Funnel<span>Track</span></div>
+          <div class="nav-item ${tab==='overview'?'active':''}" onclick="go('overview')">${icons.overview} Overview</div>
+          <div class="nav-item ${tab==='youtube'?'active':''}" onclick="go('youtube')">${icons.youtube} YouTube</div>
+          <div class="nav-item ${tab==='activity'?'active':''}" onclick="go('activity')">${icons.activity} Activity</div>
+          <div class="nav-sep"></div>
+          <div class="nav-item ${tab==='links'?'active':''}" onclick="go('links')">${icons.link} UTM Links</div>
         </div>
-      `;
-      document.getElementById('secret-input').addEventListener('keydown', e => {
-        if (e.key === 'Enter') submitSecret();
-      });
+        <div class="main">${content}</div>
+      </div>`;
     }
 
-    function submitSecret() {
-      secret = document.getElementById('secret-input').value;
-      localStorage.setItem('dashboard_secret', secret);
-      loadDashboard();
+    function go(t) { tab=t; if(t==='overview') loadOverview(); else if(t==='youtube') loadYouTube(); else if(t==='activity') loadActivity(); else if(t==='links') showLinks(); }
+
+    function fmtN(n) { if(n>=1e6) return (n/1e6).toFixed(1)+'M'; if(n>=1e3) return (n/1e3).toFixed(1)+'K'; return n.toLocaleString(); }
+    function fmtMoney(n) { return '$'+n.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}); }
+    function pct(a,b) { return b>0?((a/b)*100).toFixed(1)+'%':'0%'; }
+
+    function miniChart(data, key, color, h=120) {
+      if(!data.length) return '<div class="mini-chart" style="justify-content:center;color:var(--text3);font-size:12px;">No data yet</div>';
+      const max = Math.max(...data.map(d=>d[key]),1);
+      const bars = data.map(d=>{
+        const pct = Math.max((d[key]/max)*100, 2);
+        return `<div class="mini-bar" style="height:${pct}%;background:${color}" title="${d.day}: ${d[key]}"></div>`;
+      }).join('');
+      return `<div class="mini-chart" style="height:${h}px">${bars}</div>
+        <div class="chart-footer"><span>${data[0].day}</span><span>${data[data.length-1].day}</span></div>`;
     }
 
-    function switchTab(tab) {
-      currentTab = tab;
-      if (tab === 'dashboard') loadDashboard();
-      else if (tab === 'links') showLinkGenerator();
-      else if (tab === 'youtube') loadYouTube();
-    }
-
-    function renderTabs() {
-      return `
-        <div class="tabs">
-          <div class="tab ${currentTab === 'dashboard' ? 'active' : ''}" onclick="switchTab('dashboard')">Dashboard</div>
-          <div class="tab ${currentTab === 'youtube' ? 'active' : ''}" onclick="switchTab('youtube')">YouTube</div>
-          <div class="tab ${currentTab === 'links' ? 'active' : ''}" onclick="switchTab('links')">UTM Links</div>
-        </div>
-      `;
-    }
-
-    async function loadDashboard() {
-      currentTab = 'dashboard';
-      document.getElementById('app').innerHTML = renderTabs() + '<div class="loading">Loading dashboard...</div>';
-
+    // ============ OVERVIEW ============
+    async function loadOverview() {
+      document.getElementById('app').innerHTML = shell('<div class="loading">Loading...</div>');
       try {
-        const [stats, campaigns, activity, pageviews] = await Promise.all([
-          apiFetch('/api/dashboard/stats'),
-          apiFetch('/api/dashboard/campaigns'),
-          apiFetch('/api/dashboard/activity'),
-          apiFetch('/api/dashboard/pageviews'),
+        const [stats, campaigns, charts, funnel] = await Promise.all([
+          api('/api/dashboard/stats'),
+          api('/api/dashboard/campaigns'),
+          api('/api/dashboard/charts'),
+          api('/api/dashboard/funnel'),
         ]);
-
-        renderDashboard(stats, campaigns, activity, pageviews);
-      } catch (err) {
-        if (err.message !== 'Unauthorized') {
-          document.getElementById('app').innerHTML = renderTabs() + `<div class="error">Failed to load: ${err.message}</div>`;
-        }
-      }
+        renderOverview(stats, campaigns, charts, funnel);
+      } catch(e) { if(e.message!=='auth') document.getElementById('app').innerHTML = shell(`<div class="error">${e.message}</div>`); }
     }
 
-    function renderDashboard(stats, campaigns, activity, pageviews) {
-      const maxViews = Math.max(...pageviews.map(d => d.views), 1);
-      const bars = pageviews.map(d =>
-        `<div class="chart-bar" style="height:${Math.max((d.views/maxViews)*100, 2)}%" title="${d.day}: ${d.views} views"></div>`
-      ).join('');
-      const firstDay = pageviews.length > 0 ? pageviews[0].day : '';
-      const lastDay = pageviews.length > 0 ? pageviews[pageviews.length - 1].day : '';
+    function renderOverview(stats, campaigns, charts, funnel) {
+      const optRate = pct(stats.totalSubscribers, stats.totalPageviews);
+      const buyRate = pct(stats.totalPurchases, stats.totalSubscribers);
 
-      // Conversion rates
-      const optinRate = stats.totalPageviews > 0 ? ((stats.totalSubscribers / stats.totalPageviews) * 100).toFixed(1) : '0';
-      const purchaseRate = stats.totalSubscribers > 0 ? ((stats.totalPurchases / stats.totalSubscribers) * 100).toFixed(1) : '0';
-      const revenuePerSub = stats.totalSubscribers > 0 ? (stats.totalRevenue / stats.totalSubscribers).toFixed(2) : '0.00';
+      // Campaign table with pageviews
+      const fc = funnel.campaigns || campaigns;
+      const campRows = fc.length > 0 ? fc.map(c => `<tr>
+        <td><span class="tag tag-purple">${c.campaign}</span></td>
+        <td><span class="tag tag-blue">${c.source}</span></td>
+        <td>${c.pageviews !== undefined ? fmtN(c.pageviews) : '-'}</td>
+        <td>${c.subscribers}</td>
+        <td>${c.buyers}</td>
+        <td>${fmtMoney(c.revenue)}</td>
+        <td>${c.revenuePerSub !== undefined ? fmtMoney(c.revenuePerSub) : '-'}</td>
+        <td>${c.conversionRate}</td>
+      </tr>`).join('') : '<tr><td colspan="8" class="empty-state">No data yet</td></tr>';
 
-      const campaignRows = campaigns.length > 0 ? campaigns.map(c => `
-        <tr>
-          <td><span class="badge badge-purple">${c.campaign}</span></td>
-          <td><span class="badge badge-blue">${c.source}</span></td>
-          <td>${c.subscribers}</td>
-          <td>${c.buyers}</td>
-          <td>$${c.revenue.toFixed(2)}</td>
-          <td>${c.conversionRate}</td>
-        </tr>
-      `).join('') : '<tr><td colspan="6" style="text-align:center;color:#64748b;padding:24px;">No campaign data yet.</td></tr>';
-
-      const activityRows = activity.length > 0 ? activity.slice(0, 15).map(a => {
-        const badgeClass = a.event === 'optin_submit' ? 'badge-green' : a.event === 'purchase' ? 'badge-amber' : 'badge-blue';
-        return `
-        <tr>
-          <td><span class="badge ${badgeClass}">${a.event}</span></td>
-          <td>${a.visitor}</td>
-          <td>${a.email || '-'}</td>
-          <td>${new Date(a.time + 'Z').toLocaleString()}</td>
-        </tr>
-      `}).join('') : '<tr><td colspan="4" style="text-align:center;color:#64748b;padding:24px;">No events yet.</td></tr>';
-
-      document.getElementById('app').innerHTML = `
-        ${renderTabs()}
-        <h1>Funnel Dashboard <button class="refresh-btn" onclick="loadDashboard()">Refresh</button></h1>
-
-        <div class="funnel">
-          <div class="funnel-step">
-            <div class="step-label">Pageviews</div>
-            <div class="step-value" style="color:#60a5fa">${stats.totalPageviews.toLocaleString()}</div>
-          </div>
-          <div>
-            <div class="funnel-arrow">&rarr;</div>
-            <div class="funnel-rate">${optinRate}%</div>
-          </div>
-          <div class="funnel-step">
-            <div class="step-label">Subscribers</div>
-            <div class="step-value" style="color:#4ade80">${stats.totalSubscribers.toLocaleString()}</div>
-          </div>
-          <div>
-            <div class="funnel-arrow">&rarr;</div>
-            <div class="funnel-rate">${purchaseRate}%</div>
-          </div>
-          <div class="funnel-step">
-            <div class="step-label">Purchases</div>
-            <div class="step-value" style="color:#c084fc">${stats.totalPurchases.toLocaleString()}</div>
-          </div>
-          <div>
-            <div class="funnel-arrow">&rarr;</div>
-          </div>
-          <div class="funnel-step">
-            <div class="step-label">Revenue</div>
-            <div class="step-value" style="color:#fbbf24">$${stats.totalRevenue.toLocaleString(undefined, {minimumFractionDigits: 2})}</div>
-          </div>
+      document.querySelector('.main').innerHTML = `
+        <div class="page-header">
+          <h1>Overview</h1>
+          <div class="header-actions"><button class="btn" onclick="go('overview')">Refresh</button></div>
         </div>
 
-        <div class="stats-grid">
-          <div class="stat-card">
-            <div class="label">Opt-in Rate</div>
-            <div class="value green">${optinRate}%</div>
-            <div class="sub">pageview &rarr; subscriber</div>
-          </div>
-          <div class="stat-card">
-            <div class="label">Purchase Rate</div>
-            <div class="value purple">${purchaseRate}%</div>
-            <div class="sub">subscriber &rarr; buyer</div>
-          </div>
-          <div class="stat-card">
-            <div class="label">Revenue / Subscriber</div>
-            <div class="value amber">$${revenuePerSub}</div>
-            <div class="sub">lifetime value</div>
-          </div>
-          <div class="stat-card">
-            <div class="label">Total Events</div>
-            <div class="value blue">${stats.totalEvents.toLocaleString()}</div>
-            <div class="sub">all tracked actions</div>
-          </div>
+        <div class="funnel-bar">
+          <div class="fb-step"><div class="fb-val" style="color:var(--blue)">${fmtN(stats.totalPageviews)}</div><div class="fb-label">Pageviews</div></div>
+          <div class="fb-arrow">&rarr;<br><span class="fb-rate">${optRate}</span></div>
+          <div class="fb-step"><div class="fb-val" style="color:var(--green)">${fmtN(stats.totalSubscribers)}</div><div class="fb-label">Subscribers</div></div>
+          <div class="fb-arrow">&rarr;<br><span class="fb-rate">${buyRate}</span></div>
+          <div class="fb-step"><div class="fb-val" style="color:var(--purple)">${fmtN(stats.totalPurchases)}</div><div class="fb-label">Purchases</div></div>
+          <div class="fb-arrow">&rarr;</div>
+          <div class="fb-step"><div class="fb-val" style="color:var(--amber)">${fmtMoney(stats.totalRevenue)}</div><div class="fb-label">Revenue</div></div>
         </div>
 
-        <div class="section">
-          <h2>Pageviews (Last 30 Days)</h2>
-          <div class="chart-container">
-            <div class="chart-bar-row">${bars || '<div style="color:#64748b;margin:auto;">No data yet</div>'}</div>
-            <div class="chart-labels"><span>${firstDay}</span><span>${lastDay}</span></div>
-          </div>
+        <div class="stats-row">
+          <div class="stat"><div class="label">Opt-in Rate</div><div class="val" style="color:var(--green)">${optRate}</div><div class="sub">page &rarr; subscriber</div></div>
+          <div class="stat"><div class="label">Purchase Rate</div><div class="val" style="color:var(--purple)">${buyRate}</div><div class="sub">subscriber &rarr; buyer</div></div>
+          <div class="stat"><div class="label">Rev / Subscriber</div><div class="val" style="color:var(--amber)">${fmtMoney(stats.totalSubscribers>0?stats.totalRevenue/stats.totalSubscribers:0)}</div><div class="sub">lifetime value</div></div>
+          <div class="stat"><div class="label">Total Events</div><div class="val" style="color:var(--cyan)">${fmtN(stats.totalEvents)}</div><div class="sub">all tracked actions</div></div>
         </div>
 
-        <div class="section">
-          <h2>Campaign Performance</h2>
+        <div class="chart-row">
+          <div class="chart-card"><h3>Pageviews (30 days)</h3>${miniChart(charts.pageviews, 'views', 'var(--blue)')}</div>
+          <div class="chart-card"><h3>New Subscribers (30 days)</h3>${miniChart(charts.subscribers, 'count', 'var(--green)')}</div>
+        </div>
+
+        <div class="table-card">
+          <h3>Campaign Performance</h3>
           <table>
-            <thead><tr><th>Campaign</th><th>Source</th><th>Subscribers</th><th>Buyers</th><th>Revenue</th><th>Conv. Rate</th></tr></thead>
-            <tbody>${campaignRows}</tbody>
-          </table>
-        </div>
-
-        <div class="section">
-          <h2>Recent Activity</h2>
-          <table>
-            <thead><tr><th>Event</th><th>Visitor</th><th>Email</th><th>Time</th></tr></thead>
-            <tbody>${activityRows}</tbody>
+            <thead><tr><th>Campaign</th><th>Source</th><th>Views</th><th>Subs</th><th>Buyers</th><th>Revenue</th><th>Rev/Sub</th><th>Conv.</th></tr></thead>
+            <tbody>${campRows}</tbody>
           </table>
         </div>
       `;
     }
 
-    // ---- UTM Link Generator ----
-    const SITE_URL = 'https://goddardsecrets.com/';
-
-    function getUtmHistory() {
-      try { return JSON.parse(localStorage.getItem('utm_history') || '[]'); } catch(e) { return []; }
-    }
-    function saveUtmHistory(list) {
-      localStorage.setItem('utm_history', JSON.stringify(list.slice(0, 20)));
-    }
-
-    function showLinkGenerator() {
-      currentTab = 'links';
-      const history = getUtmHistory();
-      const historyHtml = history.length > 0 ? history.map(h => `
-        <div class="utm-link-item">
-          <span class="campaign">${h.campaign}</span>
-          <span class="link">${h.url.replace(SITE_URL, '').substring(0, 50)}</span>
-          <button class="copy-sm" onclick="copyText('${h.url}', this)">Copy</button>
-        </div>
-      `).join('') : '<div style="color:#64748b;font-size:13px;">No links generated yet.</div>';
-
-      document.getElementById('app').innerHTML = `
-        ${renderTabs()}
-        <h1>UTM Link Generator</h1>
-        <div class="utm-gen">
-          <label>Video Topic / Campaign Name</label>
-          <input type="text" id="utm-campaign" placeholder="e.g. revision-technique, sleep-manifestation" oninput="updateUtmPreview()" />
-
-          <label>Source</label>
-          <select id="utm-source" onchange="updateUtmPreview()">
-            <option value="youtube">YouTube</option>
-            <option value="instagram">Instagram</option>
-            <option value="tiktok">TikTok</option>
-            <option value="twitter">Twitter / X</option>
-            <option value="facebook">Facebook</option>
-            <option value="email">Email</option>
-            <option value="other">Other</option>
-          </select>
-
-          <label>Medium (optional)</label>
-          <select id="utm-medium">
-            <option value="">-- auto --</option>
-            <option value="organic">Organic</option>
-            <option value="paid">Paid</option>
-            <option value="link">Link in bio</option>
-            <option value="description">Video description</option>
-          </select>
-
-          <div class="utm-output" id="utm-output" style="display:none;">
-            <span id="utm-url"></span>
-            <button class="copy-btn" id="utm-copy-btn" onclick="copyGeneratedLink()">Copy</button>
-          </div>
-        </div>
-
-        <div class="utm-history" style="max-width:640px;margin-top:24px;">
-          <h3>Recent Links</h3>
-          ${historyHtml}
-        </div>
-      `;
-    }
-
-    function updateUtmPreview() {
-      const campaign = document.getElementById('utm-campaign').value.trim().toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-');
-      const source = document.getElementById('utm-source').value;
-      const medium = document.getElementById('utm-medium')?.value || '';
-
-      if (!campaign) {
-        document.getElementById('utm-output').style.display = 'none';
-        return;
-      }
-
-      let url = SITE_URL + '?utm_source=' + source + '&utm_campaign=' + campaign;
-      if (medium) url += '&utm_medium=' + medium;
-
-      document.getElementById('utm-url').textContent = url;
-      document.getElementById('utm-output').style.display = 'block';
-
-      // Save to history on generation
-      const history = getUtmHistory();
-      if (!history.find(h => h.url === url)) {
-        history.unshift({ campaign, source, url, created: new Date().toISOString() });
-        saveUtmHistory(history);
-      }
-    }
-
-    function copyGeneratedLink() {
-      const url = document.getElementById('utm-url').textContent;
-      copyText(url, document.getElementById('utm-copy-btn'));
-    }
-
-    function copyText(text, btn) {
-      navigator.clipboard.writeText(text).then(() => {
-        const orig = btn.textContent;
-        btn.textContent = 'Copied!';
-        btn.classList.add('copied');
-        setTimeout(() => { btn.textContent = orig; btn.classList.remove('copied'); }, 2000);
-      });
-    }
-
-    // ---- YouTube ----
+    // ============ YOUTUBE ============
     async function loadYouTube() {
-      currentTab = 'youtube';
-      document.getElementById('app').innerHTML = renderTabs() + '<div class="loading">Loading YouTube data...</div>';
-
+      document.getElementById('app').innerHTML = shell('<div class="loading">Loading YouTube data...</div>');
       try {
-        const data = await apiFetch('/api/dashboard/youtube');
+        const data = await api('/api/dashboard/youtube');
         renderYouTube(data);
-      } catch (err) {
-        if (err.message !== 'Unauthorized') {
-          document.getElementById('app').innerHTML = renderTabs() + `<div class="error">Failed to load YouTube data: ${err.message}</div>`;
-        }
-      }
-    }
-
-    function fmtNum(n) {
-      if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
-      if (n >= 1000) return (n / 1000).toFixed(1) + 'K';
-      return n.toLocaleString();
+      } catch(e) { if(e.message!=='auth') document.querySelector('.main').innerHTML = `<div class="error">${e.message}</div>`; }
     }
 
     function renderYouTube(data) {
-      const channel = data.channel;
-      const videos = data.videos || [];
+      const ch = data.channel;
+      const channelHtml = ch ? `<div class="stats-row">
+        <div class="stat"><div class="label">Subscribers</div><div class="val" style="color:var(--rose)">${fmtN(ch.subscriberCount)}</div></div>
+        <div class="stat"><div class="label">Total Views</div><div class="val" style="color:var(--blue)">${fmtN(ch.viewCount)}</div></div>
+        <div class="stat"><div class="label">Videos</div><div class="val" style="color:var(--purple)">${fmtN(ch.videoCount)}</div></div>
+      </div>` : '';
 
-      const channelHtml = channel ? `
-        <div class="yt-channel-stats">
-          <div class="yt-channel-stat">
-            <div class="yt-label">Subscribers</div>
-            <div class="yt-val">${fmtNum(channel.subscriberCount)}</div>
-          </div>
-          <div class="yt-channel-stat">
-            <div class="yt-label">Total Views</div>
-            <div class="yt-val">${fmtNum(channel.viewCount)}</div>
-          </div>
-          <div class="yt-channel-stat">
-            <div class="yt-label">Videos</div>
-            <div class="yt-val">${fmtNum(channel.videoCount)}</div>
-          </div>
-        </div>
-      ` : '';
-
-      const videosHtml = videos.length > 0 ? videos.map(v => {
-        const date = new Date(v.publishedAt).toLocaleDateString();
-        return `
-        <div class="video-card">
-          <img src="${v.thumbnail}" alt="" loading="lazy" />
-          <div class="video-info">
-            <div class="video-title"><a href="https://youtube.com/watch?v=${v.videoId}" target="_blank">${v.title}</a></div>
-            <div class="video-stats">
-              <div class="video-stat">Views: <span>${fmtNum(v.views)}</span></div>
-              <div class="video-stat">Likes: <span>${fmtNum(v.likes)}</span></div>
-              <div class="video-stat">Comments: <span>${fmtNum(v.comments)}</span></div>
-              <div class="video-stat">Published: <span>${date}</span></div>
+      const vids = (data.videos||[]).map(v => `
+        <div class="video-row">
+          <img src="${v.thumbnail}" alt="" loading="lazy"/>
+          <div class="vid-info">
+            <div class="vid-title"><a href="https://youtube.com/watch?v=${v.videoId}" target="_blank">${v.title}</a></div>
+            <div class="vid-meta">
+              <span><b>${fmtN(v.views)}</b> views</span>
+              <span><b>${fmtN(v.likes)}</b> likes</span>
+              <span><b>${fmtN(v.comments)}</b> comments</span>
+              <span>${new Date(v.publishedAt).toLocaleDateString()}</span>
             </div>
           </div>
         </div>
-      `}).join('') : '<div style="color:#64748b;padding:24px;text-align:center;">No videos found.</div>';
+      `).join('') || '<div class="empty-state">No videos found</div>';
 
-      document.getElementById('app').innerHTML = `
-        ${renderTabs()}
-        <h1>YouTube Analytics <button class="refresh-btn" onclick="loadYouTube()">Refresh</button></h1>
+      document.querySelector('.main').innerHTML = `
+        <div class="page-header"><h1>YouTube</h1><div class="header-actions"><button class="btn" onclick="go('youtube')">Refresh</button></div></div>
         ${channelHtml}
-        <div class="section">
-          <h2>Recent Videos</h2>
-          ${videosHtml}
+        <div class="table-card"><h3>Recent Videos</h3>${vids}</div>
+      `;
+    }
+
+    // ============ ACTIVITY ============
+    async function loadActivity() {
+      document.getElementById('app').innerHTML = shell('<div class="loading">Loading...</div>');
+      try {
+        const activity = await api('/api/dashboard/activity');
+        renderActivity(activity);
+      } catch(e) { if(e.message!=='auth') document.querySelector('.main').innerHTML = `<div class="error">${e.message}</div>`; }
+    }
+
+    function renderActivity(activity) {
+      const rows = activity.length > 0 ? activity.map(a => {
+        const cls = a.event==='optin_submit'?'tag-green':a.event==='purchase'?'tag-amber':'tag-blue';
+        return `<tr><td><span class="tag ${cls}">${a.event}</span></td><td style="font-family:monospace;font-size:12px;">${a.visitor}</td><td>${a.email||'-'}</td><td style="color:var(--text3)">${new Date(a.time+'Z').toLocaleString()}</td></tr>`;
+      }).join('') : '<tr><td colspan="4" class="empty-state">No events yet</td></tr>';
+
+      document.querySelector('.main').innerHTML = `
+        <div class="page-header"><h1>Activity Feed</h1><div class="header-actions"><button class="btn" onclick="go('activity')">Refresh</button></div></div>
+        <div class="table-card">
+          <table><thead><tr><th>Event</th><th>Visitor</th><th>Email</th><th>Time</th></tr></thead><tbody>${rows}</tbody></table>
         </div>
       `;
     }
 
+    // ============ UTM LINKS ============
+    const SITE = 'https://goddardsecrets.com/';
+    function getHist(){try{return JSON.parse(localStorage.getItem('utm_h')||'[]')}catch(e){return[]}}
+    function saveHist(h){localStorage.setItem('utm_h',JSON.stringify(h.slice(0,20)))}
+
+    function showLinks() {
+      const hist = getHist();
+      const hHtml = hist.length>0?hist.map(h=>`
+        <div class="utm-history-item">
+          <span class="camp">${h.c}</span>
+          <span class="lnk">${h.u}</span>
+          <button class="btn" style="padding:2px 10px;font-size:11px;" onclick="cpTxt('${h.u}',this)">Copy</button>
+        </div>
+      `).join(''):'<div style="color:var(--text3);font-size:13px;padding:8px 0;">No links yet. Generate one above.</div>';
+
+      document.getElementById('app').innerHTML = shell(`
+        <div class="page-header"><h1>UTM Link Generator</h1></div>
+        <div class="card utm-gen">
+          <label>Campaign Name</label>
+          <input type="text" id="uc" placeholder="e.g. revision-technique, sleep-manifestation" oninput="utmPreview()"/>
+          <label>Source</label>
+          <select id="us" onchange="utmPreview()">
+            <option value="youtube">YouTube</option><option value="instagram">Instagram</option>
+            <option value="tiktok">TikTok</option><option value="twitter">Twitter / X</option>
+            <option value="facebook">Facebook</option><option value="email">Email</option>
+          </select>
+          <label>Medium</label>
+          <select id="um" onchange="utmPreview()">
+            <option value="">Auto</option><option value="organic">Organic</option>
+            <option value="paid">Paid</option><option value="description">Video description</option>
+          </select>
+          <div class="utm-output" id="uo" style="display:none"><span id="uu"></span><button class="copy-btn" id="ucb" onclick="cpGen()">Copy</button></div>
+        </div>
+        <div style="max-width:560px;margin-top:24px;">
+          <h3 style="font-size:13px;color:var(--text2);margin-bottom:8px;">Recent Links</h3>
+          ${hHtml}
+        </div>
+      `);
+    }
+
+    function utmPreview(){
+      const c=document.getElementById('uc').value.trim().toLowerCase().replace(/[^a-z0-9-]/g,'-').replace(/-+/g,'-');
+      const s=document.getElementById('us').value;
+      const m=document.getElementById('um').value;
+      if(!c){document.getElementById('uo').style.display='none';return}
+      let u=SITE+'?utm_source='+s+'&utm_campaign='+c;
+      if(m)u+='&utm_medium='+m;
+      document.getElementById('uu').textContent=u;
+      document.getElementById('uo').style.display='block';
+      const h=getHist();if(!h.find(x=>x.u===u)){h.unshift({c,s,u,t:Date.now()});saveHist(h)}
+    }
+    function cpGen(){cpTxt(document.getElementById('uu').textContent,document.getElementById('ucb'))}
+    function cpTxt(t,b){navigator.clipboard.writeText(t).then(()=>{const o=b.textContent;b.textContent='Copied!';b.classList.add('copied');setTimeout(()=>{b.textContent=o;b.classList.remove('copied')},1500)})}
+
     // Boot
-    loadDashboard();
+    go('overview');
   </script>
 </body>
 </html>
