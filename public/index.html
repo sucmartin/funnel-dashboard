@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Funnel Dashboard</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0f172a; color: #e2e8f0; padding: 24px; min-height: 100vh;
+    }
+    h1 { font-size: 24px; font-weight: 700; margin-bottom: 24px; }
+    .stats-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px; margin-bottom: 32px;
+    }
+    .stat-card {
+      background: #1e293b; border-radius: 12px; padding: 20px;
+      border: 1px solid #334155;
+    }
+    .stat-card .label { font-size: 13px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; }
+    .stat-card .value { font-size: 32px; font-weight: 700; margin-top: 4px; }
+    .stat-card .value.green { color: #4ade80; }
+    .stat-card .value.blue { color: #60a5fa; }
+    .stat-card .value.purple { color: #c084fc; }
+    .stat-card .value.amber { color: #fbbf24; }
+
+    .section { margin-bottom: 32px; }
+    .section h2 { font-size: 18px; font-weight: 600; margin-bottom: 12px; }
+
+    table { width: 100%; border-collapse: collapse; background: #1e293b; border-radius: 12px; overflow: hidden; }
+    th { text-align: left; padding: 12px 16px; font-size: 12px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid #334155; }
+    td { padding: 12px 16px; font-size: 14px; border-bottom: 1px solid #1e293b; }
+    tr:nth-child(even) td { background: #162032; }
+    tr:hover td { background: #1e3a5f; }
+
+    .badge {
+      display: inline-block; padding: 2px 8px; border-radius: 9999px;
+      font-size: 11px; font-weight: 600;
+    }
+    .badge-green { background: #166534; color: #4ade80; }
+    .badge-blue { background: #1e3a5f; color: #60a5fa; }
+    .badge-purple { background: #3b1764; color: #c084fc; }
+
+    .chart-container {
+      background: #1e293b; border-radius: 12px; padding: 20px;
+      border: 1px solid #334155; height: 200px; position: relative;
+    }
+    .chart-bar-row { display: flex; align-items: flex-end; height: 160px; gap: 2px; padding-top: 10px; }
+    .chart-bar {
+      flex: 1; background: #3b82f6; border-radius: 3px 3px 0 0;
+      min-width: 4px; transition: background 0.2s; position: relative;
+    }
+    .chart-bar:hover { background: #60a5fa; }
+    .chart-labels { display: flex; justify-content: space-between; margin-top: 4px; font-size: 10px; color: #64748b; }
+
+    .loading { text-align: center; padding: 40px; color: #64748b; }
+    .error { text-align: center; padding: 40px; color: #f87171; }
+
+    .auth-form {
+      max-width: 360px; margin: 100px auto; background: #1e293b;
+      padding: 32px; border-radius: 12px; border: 1px solid #334155;
+    }
+    .auth-form h2 { margin-bottom: 16px; text-align: center; }
+    .auth-form input {
+      width: 100%; padding: 10px 14px; border-radius: 8px; border: 1px solid #334155;
+      background: #0f172a; color: #e2e8f0; font-size: 14px; margin-bottom: 12px;
+    }
+    .auth-form button {
+      width: 100%; padding: 10px; border-radius: 8px; border: none;
+      background: #3b82f6; color: white; font-size: 14px; font-weight: 600;
+      cursor: pointer;
+    }
+    .auth-form button:hover { background: #2563eb; }
+
+    .refresh-btn {
+      float: right; padding: 6px 14px; border-radius: 8px; border: 1px solid #334155;
+      background: #1e293b; color: #94a3b8; font-size: 12px; cursor: pointer;
+    }
+    .refresh-btn:hover { background: #334155; color: #e2e8f0; }
+
+    @media (max-width: 640px) {
+      body { padding: 12px; }
+      .stat-card .value { font-size: 24px; }
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div class="loading">Loading dashboard...</div>
+  </div>
+
+  <script>
+    const API_BASE = window.location.origin;
+    let secret = localStorage.getItem('dashboard_secret') || '';
+
+    function qs(s) { return secret ? `${s}${s.includes('?') ? '&' : '?'}secret=${encodeURIComponent(secret)}` : s; }
+
+    async function apiFetch(path) {
+      const res = await fetch(qs(`${API_BASE}${path}`));
+      if (res.status === 401) { showAuth(); throw new Error('Unauthorized'); }
+      if (!res.ok) throw new Error(`API error: ${res.status}`);
+      return res.json();
+    }
+
+    function showAuth() {
+      document.getElementById('app').innerHTML = `
+        <div class="auth-form">
+          <h2>Dashboard Access</h2>
+          <input type="password" id="secret-input" placeholder="Enter dashboard secret" autofocus />
+          <button onclick="submitSecret()">Unlock</button>
+        </div>
+      `;
+      document.getElementById('secret-input').addEventListener('keydown', e => {
+        if (e.key === 'Enter') submitSecret();
+      });
+    }
+
+    function submitSecret() {
+      secret = document.getElementById('secret-input').value;
+      localStorage.setItem('dashboard_secret', secret);
+      loadDashboard();
+    }
+
+    async function loadDashboard() {
+      document.getElementById('app').innerHTML = '<div class="loading">Loading dashboard...</div>';
+
+      try {
+        const [stats, campaigns, activity, pageviews] = await Promise.all([
+          apiFetch('/api/dashboard/stats'),
+          apiFetch('/api/dashboard/campaigns'),
+          apiFetch('/api/dashboard/activity'),
+          apiFetch('/api/dashboard/pageviews'),
+        ]);
+
+        render(stats, campaigns, activity, pageviews);
+      } catch (err) {
+        if (err.message !== 'Unauthorized') {
+          document.getElementById('app').innerHTML = `<div class="error">Failed to load: ${err.message}</div>`;
+        }
+      }
+    }
+
+    function render(stats, campaigns, activity, pageviews) {
+      const maxViews = Math.max(...pageviews.map(d => d.views), 1);
+      const bars = pageviews.map(d =>
+        `<div class="chart-bar" style="height:${Math.max((d.views/maxViews)*100, 2)}%" title="${d.day}: ${d.views} views"></div>`
+      ).join('');
+      const firstDay = pageviews.length > 0 ? pageviews[0].day : '';
+      const lastDay = pageviews.length > 0 ? pageviews[pageviews.length - 1].day : '';
+
+      const campaignRows = campaigns.length > 0 ? campaigns.map(c => `
+        <tr>
+          <td><span class="badge badge-purple">${c.campaign}</span></td>
+          <td><span class="badge badge-blue">${c.source}</span></td>
+          <td>${c.subscribers}</td>
+          <td>${c.buyers}</td>
+          <td>$${c.revenue.toFixed(2)}</td>
+          <td>${c.conversionRate}</td>
+        </tr>
+      `).join('') : '<tr><td colspan="6" style="text-align:center;color:#64748b;padding:24px;">No campaign data yet. Subscribers will appear here once people opt in.</td></tr>';
+
+      const activityRows = activity.length > 0 ? activity.map(a => `
+        <tr>
+          <td><span class="badge badge-green">${a.event}</span></td>
+          <td>${a.visitor}</td>
+          <td>${a.email || '-'}</td>
+          <td>${new Date(a.time + 'Z').toLocaleString()}</td>
+        </tr>
+      `).join('') : '<tr><td colspan="4" style="text-align:center;color:#64748b;padding:24px;">No events yet. Activity will appear as visitors interact with your funnel.</td></tr>';
+
+      document.getElementById('app').innerHTML = `
+        <h1>Funnel Dashboard <button class="refresh-btn" onclick="loadDashboard()">Refresh</button></h1>
+
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="label">Pageviews</div>
+            <div class="value blue">${stats.totalPageviews.toLocaleString()}</div>
+          </div>
+          <div class="stat-card">
+            <div class="label">Subscribers</div>
+            <div class="value green">${stats.totalSubscribers.toLocaleString()}</div>
+          </div>
+          <div class="stat-card">
+            <div class="label">Purchases</div>
+            <div class="value purple">${stats.totalPurchases.toLocaleString()}</div>
+          </div>
+          <div class="stat-card">
+            <div class="label">Revenue</div>
+            <div class="value amber">$${stats.totalRevenue.toLocaleString(undefined, {minimumFractionDigits: 2})}</div>
+          </div>
+        </div>
+
+        <div class="section">
+          <h2>Pageviews (Last 30 Days)</h2>
+          <div class="chart-container">
+            <div class="chart-bar-row">${bars || '<div style="color:#64748b;margin:auto;">No data yet</div>'}</div>
+            <div class="chart-labels"><span>${firstDay}</span><span>${lastDay}</span></div>
+          </div>
+        </div>
+
+        <div class="section">
+          <h2>Campaign Breakdown</h2>
+          <table>
+            <thead><tr><th>Campaign</th><th>Source</th><th>Subscribers</th><th>Buyers</th><th>Revenue</th><th>Conv. Rate</th></tr></thead>
+            <tbody>${campaignRows}</tbody>
+          </table>
+        </div>
+
+        <div class="section">
+          <h2>Recent Activity</h2>
+          <table>
+            <thead><tr><th>Event</th><th>Visitor</th><th>Email</th><th>Time</th></tr></thead>
+            <tbody>${activityRows}</tbody>
+          </table>
+        </div>
+      `;
+    }
+
+    // Boot
+    loadDashboard();
+  </script>
+</body>
+</html>
