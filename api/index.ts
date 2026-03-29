@@ -49,28 +49,6 @@ app.get('/api/cron/daily-summary', async (_req, res) => {
   }
 });
 
-// Temporary: reset all data (remove after use)
-app.post('/api/admin/reset', async (req, res) => {
-  const secret = req.query.secret as string;
-  if (secret !== (process.env.DASHBOARD_SECRET || '')) {
-    res.status(401).json({ error: 'Unauthorized' });
-    return;
-  }
-  try {
-    const { getDb, ensureSchema } = await import('../src/db/connection');
-    await ensureSchema();
-    const db = getDb();
-    await db.execute('DELETE FROM pageviews');
-    await db.execute('DELETE FROM events');
-    await db.execute('DELETE FROM subscribers');
-    await db.execute('DELETE FROM purchases');
-    await db.execute('DELETE FROM campaign_costs');
-    res.json({ ok: true, message: 'All data cleared' });
-  } catch (err) {
-    res.status(500).json({ error: String(err) });
-  }
-});
-
 // For local dev
 if (process.env.NODE_ENV !== 'production') {
   const port = parseInt(process.env.PORT || '4891', 10);
