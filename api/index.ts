@@ -35,6 +35,20 @@ app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+// Daily summary cron (called by Vercel Cron at 8am UTC)
+app.get('/api/cron/daily-summary', async (_req, res) => {
+  try {
+    const { getDailySummary } = await import('../src/db/queries');
+    const summary = await getDailySummary();
+    console.log(`[Cron] Daily summary: ${summary.pageviews} pageviews, ${summary.subscribers} subs, ${summary.purchases} purchases, $${summary.revenue} revenue`);
+    // Could send email/Slack notification here in the future
+    res.json({ ok: true, summary });
+  } catch (err) {
+    console.error('[Cron] Daily summary error:', err);
+    res.status(500).json({ error: 'Failed' });
+  }
+});
+
 // For local dev
 if (process.env.NODE_ENV !== 'production') {
   const port = parseInt(process.env.PORT || '4891', 10);

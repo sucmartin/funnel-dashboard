@@ -228,7 +228,6 @@ export async function getCampaignPageviews() {
 export async function getPageviewsByDay(days = 30) {
   await ensureSchema();
   const db = getDb();
-
   const result = await db.execute({
     sql: `SELECT DATE(created_at) as day, COUNT(*) as views
           FROM pageviews
@@ -237,9 +236,147 @@ export async function getPageviewsByDay(days = 30) {
           ORDER BY day ASC`,
     args: [`-${days}`],
   });
-
   return result.rows.map(row => ({
     day: row.day as string,
     views: Number(row.views),
   }));
+}
+
+// ---- Cost tracking ----
+
+export async function addCampaignCost(data: {
+  utm_campaign: string;
+  amount_cents: number;
+  description?: string;
+  spend_date?: string;
+}) {
+  await ensureSchema();
+  const db = getDb();
+  await db.execute({
+    sql: `INSERT INTO campaign_costs (utm_campaign, amount_cents, description, spend_date)
+          VALUES (?, ?, ?, ?)`,
+    args: [data.utm_campaign, data.amount_cents, data.description || null, data.spend_date || new Date().toISOString().split('T')[0]],
+  });
+}
+
+export async function getCampaignCosts() {
+  await ensureSchema();
+  const db = getDb();
+  const result = await db.execute(`
+    SELECT utm_campaign as campaign, SUM(amount_cents) as total_cents, COUNT(*) as entries
+    FROM campaign_costs
+    GROUP BY utm_campaign
+    ORDER BY total_cents DESC
+  `);
+  return result.rows.map(row => ({
+    campaign: row.campaign as string,
+    totalSpend: Number(row.total_cents) / 100,
+    entries: Number(row.entries),
+  }));
+}
+
+export async function getCostEntries(campaign?: string) {
+  await ensureSchema();
+  const db = getDb();
+  const result = campaign
+    ? await db.execute({ sql: `SELECT * FROM campaign_costs WHERE utm_campaign = ? ORDER BY spend_date DESC`, args: [campaign] })
+    : await db.execute(`SELECT * FROM campaign_costs ORDER BY spend_date DESC LIMIT 50`);
+  return result.rows.map(row => ({
+    id: Number(row.id),
+    campaign: row.utm_campaign as string,
+    amount: Number(row.amount_cents) / 100,
+    description: row.description as string | null,
+    date: row.spend_date as string,
+  }));
+}
+
+// ---- Subscriber quality scoring ----
+
+export async function getSubscriberScoring() {
+  await ensureSchema();
+  const db = getDb();
+  const result = await db.execute(`
+    SELECT
+      COALESCE(s.utm_campaign, 'direct') as campaign,
+      COALESCE(s.utm_source, 'unknown') as source,
+      COUNT(DISTINCT s.email) as total_subs,
+      COUNT(DISTINCT p.email) as buyers,
+      COALESCE(SUM(p.amount_cents), 0) as revenue_cents,
+      ROUND(CAST(COUNT(DISTINCT p.email) AS FLOAT) / NULLIF(COUNT(DISTINCT s.email), 0) * 100, 1) as buy_rate,
+      ROUND(CAST(COALESCE(SUM(p.amount_cents), 0) AS FLOAT) / NULLIF(COUNT(DISTINCT s.email), 0) / 100, 2) as rev_per_sub
+    FROM subscribers s
+    LEFT JOIN purchases p ON s.email = p.email
+    GROUP BY s.utm_campaign, s.utm_source
+    ORDER BY rev_per_sub DESC
+  `);
+  return result.rows.map(row => {
+    const revPerSub = Number(row.rev_per_sub) || 0;
+    const buyRate = Number(row.buy_rate) || 0;
+    let grade = 'D';
+    if (revPerSub >= 5) grade = 'A';
+    else if (revPerSub >= 2) grade = 'B';
+    else if (buyRate > 0) grade = 'C';
+    return {
+      campaign: row.campaign as string,
+      source: row.source as string,
+      totalSubs: Number(row.total_subs),
+      buyers: Number(row.buyers),
+      revenue: Number(row.revenue_cents) / 100,
+      buyRate: buyRate,
+      revPerSub: revPerSub,
+      grade,
+    };
+  });
+}
+
+// ---- Weekly/Monthly aggregations ----
+
+export async function getWeeklyStats(weeks = 12) {
+  await ensureSchema();
+  const db = getDb();
+  const [pvResult, subResult, revResult] = await Promise.all([
+    db.execute({
+      sql: `SELECT strftime('%Y-W%W', created_at) as week, COUNT(*) as count
+            FROM pageviews WHERE created_at >= datetime('now', ? || ' days')
+            GROUP BY week ORDER BY week ASC`,
+      args: [`-${weeks * 7}`],
+    }),
+    db.execute({
+      sql: `SELECT strftime('%Y-W%W', subscribed_at) as week, COUNT(*) as count
+            FROM subscribers WHERE subscribed_at >= datetime('now', ? || ' days')
+            GROUP BY week ORDER BY week ASC`,
+      args: [`-${weeks * 7}`],
+    }),
+    db.execute({
+      sql: `SELECT strftime('%Y-W%W', purchased_at) as week, COUNT(*) as count, COALESCE(SUM(amount_cents),0) as rev
+            FROM purchases WHERE purchased_at >= datetime('now', ? || ' days')
+            GROUP BY week ORDER BY week ASC`,
+      args: [`-${weeks * 7}`],
+    }),
+  ]);
+  return {
+    pageviews: pvResult.rows.map(r => ({ week: r.week as string, count: Number(r.count) })),
+    subscribers: subResult.rows.map(r => ({ week: r.week as string, count: Number(r.count) })),
+    revenue: revResult.rows.map(r => ({ week: r.week as string, count: Number(r.count), revenue: Number(r.rev) / 100 })),
+  };
+}
+
+// ---- Daily summary for notifications ----
+
+export async function getDailySummary() {
+  await ensureSchema();
+  const db = getDb();
+  const today = new Date().toISOString().split('T')[0];
+  const [pv, subs, purchases] = await Promise.all([
+    db.execute({ sql: `SELECT COUNT(*) as c FROM pageviews WHERE DATE(created_at) = ?`, args: [today] }),
+    db.execute({ sql: `SELECT COUNT(*) as c FROM subscribers WHERE DATE(subscribed_at) = ?`, args: [today] }),
+    db.execute({ sql: `SELECT COUNT(*) as c, COALESCE(SUM(amount_cents),0) as rev FROM purchases WHERE DATE(purchased_at) = ?`, args: [today] }),
+  ]);
+  return {
+    date: today,
+    pageviews: Number(pv.rows[0].c),
+    subscribers: Number(subs.rows[0].c),
+    purchases: Number(purchases.rows[0].c),
+    revenue: Number(purchases.rows[0].rev) / 100,
+  };
 }

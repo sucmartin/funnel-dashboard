@@ -2,9 +2,12 @@ import { Router, Request, Response } from 'express';
 import { config } from '../config';
 import {
   getDashboardStats, getCampaignBreakdown, getRecentActivity,
-  getPageviewsByDay, getSubscribersByDay, getRevenueByDay, getCampaignPageviews
+  getPageviewsByDay, getSubscribersByDay, getRevenueByDay, getCampaignPageviews,
+  addCampaignCost, getCampaignCosts, getCostEntries,
+  getSubscriberScoring, getWeeklyStats, getDailySummary,
 } from '../db/queries';
 import { getRecentVideos, getChannelStats } from '../services/youtube';
+import { getEmailCampaigns, getGroupStats } from '../services/mailerlite-stats';
 
 const router = Router();
 
@@ -21,124 +24,147 @@ function checkAuth(req: Request, res: Response): boolean {
 // GET /api/dashboard/stats
 router.get('/stats', async (req: Request, res: Response) => {
   if (!checkAuth(req, res)) return;
-  try {
-    const stats = await getDashboardStats();
-    res.json(stats);
-  } catch (err) {
-    console.error('[Dashboard] Stats error:', err);
-    res.status(500).json({ error: 'Failed to load stats' });
-  }
+  try { res.json(await getDashboardStats()); }
+  catch (err) { console.error('[Dashboard] Stats error:', err); res.status(500).json({ error: 'Failed' }); }
 });
 
 // GET /api/dashboard/campaigns
 router.get('/campaigns', async (req: Request, res: Response) => {
   if (!checkAuth(req, res)) return;
-  try {
-    const campaigns = await getCampaignBreakdown();
-    res.json(campaigns);
-  } catch (err) {
-    console.error('[Dashboard] Campaigns error:', err);
-    res.status(500).json({ error: 'Failed to load campaigns' });
-  }
+  try { res.json(await getCampaignBreakdown()); }
+  catch (err) { console.error('[Dashboard] Campaigns error:', err); res.status(500).json({ error: 'Failed' }); }
 });
 
 // GET /api/dashboard/activity
 router.get('/activity', async (req: Request, res: Response) => {
   if (!checkAuth(req, res)) return;
-  try {
-    const activity = await getRecentActivity();
-    res.json(activity);
-  } catch (err) {
-    console.error('[Dashboard] Activity error:', err);
-    res.status(500).json({ error: 'Failed to load activity' });
-  }
+  try { res.json(await getRecentActivity()); }
+  catch (err) { console.error('[Dashboard] Activity error:', err); res.status(500).json({ error: 'Failed' }); }
 });
 
 // GET /api/dashboard/pageviews
 router.get('/pageviews', async (req: Request, res: Response) => {
   if (!checkAuth(req, res)) return;
-  try {
-    const days = parseInt(req.query.days as string) || 30;
-    const pageviews = await getPageviewsByDay(days);
-    res.json(pageviews);
-  } catch (err) {
-    console.error('[Dashboard] Pageviews error:', err);
-    res.status(500).json({ error: 'Failed to load pageviews' });
-  }
+  try { res.json(await getPageviewsByDay(parseInt(req.query.days as string) || 30)); }
+  catch (err) { console.error('[Dashboard] Pageviews error:', err); res.status(500).json({ error: 'Failed' }); }
 });
 
-// GET /api/dashboard/charts — time-series data for charts
+// GET /api/dashboard/charts
 router.get('/charts', async (req: Request, res: Response) => {
   if (!checkAuth(req, res)) return;
   try {
     const days = parseInt(req.query.days as string) || 30;
     const [pageviews, subscribers, revenue] = await Promise.all([
-      getPageviewsByDay(days),
-      getSubscribersByDay(days),
-      getRevenueByDay(days),
+      getPageviewsByDay(days), getSubscribersByDay(days), getRevenueByDay(days),
     ]);
     res.json({ pageviews, subscribers, revenue });
-  } catch (err) {
-    console.error('[Dashboard] Charts error:', err);
-    res.status(500).json({ error: 'Failed to load charts' });
-  }
+  } catch (err) { console.error('[Dashboard] Charts error:', err); res.status(500).json({ error: 'Failed' }); }
+});
+
+// GET /api/dashboard/weekly
+router.get('/weekly', async (req: Request, res: Response) => {
+  if (!checkAuth(req, res)) return;
+  try { res.json(await getWeeklyStats(parseInt(req.query.weeks as string) || 12)); }
+  catch (err) { console.error('[Dashboard] Weekly error:', err); res.status(500).json({ error: 'Failed' }); }
 });
 
 // GET /api/dashboard/funnel — unified video-to-revenue attribution
 router.get('/funnel', async (req: Request, res: Response) => {
   if (!checkAuth(req, res)) return;
   try {
-    const [campaigns, campaignPageviews, ytData] = await Promise.all([
+    const [campaigns, campaignPV, costs, scoring, ytData] = await Promise.all([
       getCampaignBreakdown(),
       getCampaignPageviews(),
+      getCampaignCosts(),
+      getSubscriberScoring(),
       (config.youtube.apiKey && config.youtube.channelId)
         ? Promise.all([getChannelStats(), getRecentVideos(30)])
         : Promise.resolve([null, []] as const),
     ]);
 
     const [channel, videos] = ytData as [any, any[]];
+    const pvMap = new Map(campaignPV.map(p => [p.campaign, p.views]));
+    const costMap = new Map(costs.map(c => [c.campaign, c.totalSpend]));
+    const scoreMap = new Map(scoring.map(s => [s.campaign + '|' + s.source, s]));
 
-    // Build pageview lookup by campaign
-    const pvMap = new Map<string, number>();
-    for (const pv of campaignPageviews) {
-      pvMap.set(pv.campaign, pv.views);
-    }
-
-    // Enrich campaigns with pageviews
-    const enrichedCampaigns = campaigns.map(c => ({
-      ...c,
-      pageviews: pvMap.get(c.campaign) || 0,
-      revenuePerSub: c.subscribers > 0 ? +(c.revenue / c.subscribers).toFixed(2) : 0,
-    }));
-
-    res.json({
-      channel,
-      videos: videos || [],
-      campaigns: enrichedCampaigns,
+    const enriched = campaigns.map(c => {
+      const pageviews = pvMap.get(c.campaign) || 0;
+      const spend = costMap.get(c.campaign) || 0;
+      const score = scoreMap.get(c.campaign + '|' + c.source);
+      return {
+        ...c,
+        pageviews,
+        spend,
+        roi: spend > 0 ? +((c.revenue - spend) / spend * 100).toFixed(0) : null,
+        revenuePerSub: c.subscribers > 0 ? +(c.revenue / c.subscribers).toFixed(2) : 0,
+        grade: score?.grade || 'D',
+      };
     });
-  } catch (err) {
-    console.error('[Dashboard] Funnel error:', err);
-    res.status(500).json({ error: 'Failed to load funnel data' });
-  }
+
+    res.json({ channel, videos: videos || [], campaigns: enriched });
+  } catch (err) { console.error('[Dashboard] Funnel error:', err); res.status(500).json({ error: 'Failed' }); }
 });
 
 // GET /api/dashboard/youtube
 router.get('/youtube', async (req: Request, res: Response) => {
   if (!checkAuth(req, res)) return;
   if (!config.youtube.apiKey || !config.youtube.channelId) {
-    res.json({ channel: null, videos: [], error: 'YouTube API not configured' });
+    res.json({ channel: null, videos: [] });
     return;
   }
   try {
-    const [channel, videos] = await Promise.all([
-      getChannelStats(),
-      getRecentVideos(20),
-    ]);
+    const [channel, videos] = await Promise.all([getChannelStats(), getRecentVideos(20)]);
     res.json({ channel, videos });
-  } catch (err) {
-    console.error('[Dashboard] YouTube error:', err);
-    res.status(500).json({ error: 'Failed to load YouTube data' });
-  }
+  } catch (err) { console.error('[Dashboard] YouTube error:', err); res.status(500).json({ error: 'Failed' }); }
+});
+
+// GET /api/dashboard/emails — MailerLite email performance
+router.get('/emails', async (req: Request, res: Response) => {
+  if (!checkAuth(req, res)) return;
+  try {
+    const [campaigns, group] = await Promise.all([
+      getEmailCampaigns(20).catch(() => []),
+      getGroupStats().catch(() => null),
+    ]);
+    res.json({ campaigns, group });
+  } catch (err) { console.error('[Dashboard] Emails error:', err); res.status(500).json({ error: 'Failed' }); }
+});
+
+// GET /api/dashboard/scoring — subscriber quality scores
+router.get('/scoring', async (req: Request, res: Response) => {
+  if (!checkAuth(req, res)) return;
+  try { res.json(await getSubscriberScoring()); }
+  catch (err) { console.error('[Dashboard] Scoring error:', err); res.status(500).json({ error: 'Failed' }); }
+});
+
+// POST /api/dashboard/costs — add a cost entry
+router.post('/costs', async (req: Request, res: Response) => {
+  if (!checkAuth(req, res)) return;
+  try {
+    const { campaign, amount, description, date } = req.body;
+    if (!campaign || !amount) { res.status(400).json({ error: 'campaign and amount required' }); return; }
+    await addCampaignCost({
+      utm_campaign: campaign,
+      amount_cents: Math.round(parseFloat(amount) * 100),
+      description,
+      spend_date: date,
+    });
+    res.json({ ok: true });
+  } catch (err) { console.error('[Dashboard] Cost add error:', err); res.status(500).json({ error: 'Failed' }); }
+});
+
+// GET /api/dashboard/costs
+router.get('/costs', async (req: Request, res: Response) => {
+  if (!checkAuth(req, res)) return;
+  try { res.json(await getCostEntries(req.query.campaign as string)); }
+  catch (err) { console.error('[Dashboard] Costs error:', err); res.status(500).json({ error: 'Failed' }); }
+});
+
+// GET /api/dashboard/summary — daily summary (for cron/notifications)
+router.get('/summary', async (req: Request, res: Response) => {
+  if (!checkAuth(req, res)) return;
+  try { res.json(await getDailySummary()); }
+  catch (err) { console.error('[Dashboard] Summary error:', err); res.status(500).json({ error: 'Failed' }); }
 });
 
 export default router;

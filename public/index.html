@@ -3,417 +3,312 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Funnel Dashboard</title>
+  <title>FunnelTrack</title>
   <style>
     :root {
-      --bg: #0a0e1a; --surface: #111827; --surface2: #1a2236; --border: #1f2b3d;
-      --text: #e2e8f0; --text2: #94a3b8; --text3: #64748b;
-      --blue: #3b82f6; --green: #22c55e; --purple: #a855f7; --amber: #f59e0b;
-      --rose: #f43f5e; --cyan: #06b6d4;
-      --radius: 12px;
+      --bg:#0a0e1a;--s1:#111827;--s2:#1a2236;--s3:#222d42;--bd:#1f2b3d;
+      --t1:#e2e8f0;--t2:#94a3b8;--t3:#64748b;
+      --blue:#3b82f6;--green:#22c55e;--purple:#a855f7;--amber:#f59e0b;
+      --rose:#f43f5e;--cyan:#06b6d4;--r:12px;
     }
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
-
-    /* Layout */
-    .shell { display: flex; min-height: 100vh; }
-    .sidebar {
-      width: 220px; background: var(--surface); border-right: 1px solid var(--border);
-      padding: 24px 0; flex-shrink: 0; position: fixed; height: 100vh; overflow-y: auto;
-    }
-    .sidebar .logo { padding: 0 20px 24px; font-size: 15px; font-weight: 700; color: var(--text); letter-spacing: -0.3px; }
-    .sidebar .logo span { color: var(--blue); }
-    .nav-item {
-      display: flex; align-items: center; gap: 10px; padding: 10px 20px; font-size: 13px;
-      color: var(--text2); cursor: pointer; transition: all 0.15s; border-left: 3px solid transparent;
-    }
-    .nav-item:hover { color: var(--text); background: var(--surface2); }
-    .nav-item.active { color: var(--text); background: var(--surface2); border-left-color: var(--blue); }
-    .nav-item svg { width: 16px; height: 16px; opacity: 0.7; }
-    .nav-item.active svg { opacity: 1; }
-    .nav-sep { height: 1px; background: var(--border); margin: 12px 20px; }
-    .main { margin-left: 220px; flex: 1; padding: 28px 32px; max-width: 1200px; }
-
-    /* Header */
-    .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 28px; }
-    .page-header h1 { font-size: 22px; font-weight: 700; letter-spacing: -0.3px; }
-    .header-actions { display: flex; gap: 8px; }
-    .btn {
-      padding: 7px 14px; border-radius: 8px; border: 1px solid var(--border);
-      background: var(--surface); color: var(--text2); font-size: 12px; font-weight: 500;
-      cursor: pointer; transition: all 0.15s;
-    }
-    .btn:hover { background: var(--surface2); color: var(--text); }
-    .btn-primary { background: var(--blue); color: white; border-color: var(--blue); }
-    .btn-primary:hover { opacity: 0.9; }
-
-    /* Cards */
-    .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; }
-    .stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 24px; }
-    .stat { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px 20px; }
-    .stat .label { font-size: 11px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.8px; font-weight: 600; }
-    .stat .val { font-size: 28px; font-weight: 700; margin-top: 4px; line-height: 1; }
-    .stat .sub { font-size: 11px; color: var(--text3); margin-top: 4px; }
-
-    /* Funnel bar */
-    .funnel-bar {
-      display: flex; align-items: center; gap: 0; margin-bottom: 24px;
-      background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
-      padding: 16px 20px; overflow-x: auto;
-    }
-    .fb-step { text-align: center; flex: 1; min-width: 100px; }
-    .fb-step .fb-val { font-size: 22px; font-weight: 700; }
-    .fb-step .fb-label { font-size: 10px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.5px; margin-top: 2px; }
-    .fb-arrow { color: var(--text3); font-size: 12px; padding: 0 6px; text-align: center; }
-    .fb-arrow .fb-rate { color: var(--amber); font-weight: 600; font-size: 11px; }
-
-    /* Chart */
-    .chart-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; margin-bottom: 24px; }
-    .chart-card h3 { font-size: 13px; font-weight: 600; color: var(--text2); margin-bottom: 12px; }
-    .chart-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
-    .mini-chart { height: 120px; display: flex; align-items: flex-end; gap: 1px; }
-    .mini-bar { flex: 1; border-radius: 2px 2px 0 0; min-width: 2px; transition: opacity 0.15s; cursor: default; }
-    .mini-bar:hover { opacity: 0.8; }
-    .chart-footer { display: flex; justify-content: space-between; font-size: 10px; color: var(--text3); margin-top: 4px; }
-
-    /* Table */
-    .table-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; margin-bottom: 24px; }
-    .table-card h3 { font-size: 13px; font-weight: 600; color: var(--text2); padding: 16px 20px 0; }
-    table { width: 100%; border-collapse: collapse; }
-    th { text-align: left; padding: 10px 20px; font-size: 10px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.8px; font-weight: 600; border-bottom: 1px solid var(--border); }
-    td { padding: 10px 20px; font-size: 13px; border-bottom: 1px solid var(--border); }
-    tr:last-child td { border-bottom: none; }
-    tr:hover td { background: rgba(59,130,246,0.04); }
-    .tag {
-      display: inline-block; padding: 2px 8px; border-radius: 6px;
-      font-size: 11px; font-weight: 600;
-    }
-    .tag-blue { background: rgba(59,130,246,0.15); color: #60a5fa; }
-    .tag-green { background: rgba(34,197,94,0.15); color: #4ade80; }
-    .tag-purple { background: rgba(168,85,247,0.15); color: #c084fc; }
-    .tag-amber { background: rgba(245,158,11,0.15); color: #fbbf24; }
-    .tag-rose { background: rgba(244,63,94,0.15); color: #fb7185; }
-    .empty-state { text-align: center; padding: 32px; color: var(--text3); font-size: 13px; }
-
-    /* Video cards */
-    .video-row { display: flex; gap: 14px; align-items: center; padding: 12px 20px; border-bottom: 1px solid var(--border); }
-    .video-row:last-child { border-bottom: none; }
-    .video-row:hover { background: rgba(59,130,246,0.04); }
-    .video-row img { width: 120px; height: 68px; border-radius: 6px; object-fit: cover; flex-shrink: 0; }
-    .video-row .vid-info { flex: 1; min-width: 0; }
-    .video-row .vid-title { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .video-row .vid-title a { color: var(--text); text-decoration: none; }
-    .video-row .vid-title a:hover { color: var(--blue); }
-    .video-row .vid-meta { display: flex; gap: 14px; margin-top: 4px; font-size: 11px; color: var(--text3); }
-    .video-row .vid-meta span b { color: var(--text2); font-weight: 600; }
-
-    /* UTM Generator */
-    .utm-gen { max-width: 560px; }
-    .utm-gen label { display: block; font-size: 12px; color: var(--text3); margin-bottom: 4px; margin-top: 14px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
-    .utm-gen label:first-child { margin-top: 0; }
-    .utm-gen input, .utm-gen select {
-      width: 100%; padding: 10px 14px; border-radius: 8px; border: 1px solid var(--border);
-      background: var(--bg); color: var(--text); font-size: 14px;
-    }
-    .utm-gen select { appearance: auto; }
-    .utm-output {
-      margin-top: 18px; padding: 14px 48px 14px 14px; background: var(--bg); border-radius: 8px;
-      border: 1px solid var(--border); font-family: monospace; font-size: 13px;
-      word-break: break-all; color: var(--green); position: relative;
-    }
-    .copy-btn {
-      position: absolute; top: 10px; right: 10px; padding: 4px 10px; border-radius: 6px;
-      border: 1px solid var(--border); background: var(--surface); color: var(--text2);
-      font-size: 11px; cursor: pointer;
-    }
-    .copy-btn:hover { background: var(--surface2); color: var(--text); }
-    .copy-btn.copied { background: rgba(34,197,94,0.2); color: var(--green); border-color: rgba(34,197,94,0.3); }
-    .utm-history-item {
-      display: flex; justify-content: space-between; align-items: center;
-      padding: 8px 12px; background: var(--bg); border-radius: 6px; margin-bottom: 4px;
-      font-size: 12px; border: 1px solid var(--border);
-    }
-    .utm-history-item .camp { color: var(--purple); font-weight: 600; min-width: 120px; }
-    .utm-history-item .lnk { color: var(--text3); font-family: monospace; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin: 0 12px; }
-
-    /* Auth */
-    .auth-form {
-      max-width: 340px; margin: 120px auto; background: var(--surface);
-      padding: 32px; border-radius: var(--radius); border: 1px solid var(--border);
-    }
-    .auth-form h2 { margin-bottom: 16px; text-align: center; font-size: 18px; }
-    .auth-form input {
-      width: 100%; padding: 10px 14px; border-radius: 8px; border: 1px solid var(--border);
-      background: var(--bg); color: var(--text); font-size: 14px; margin-bottom: 12px;
-    }
-    .auth-form button { width: 100%; }
-
-    .loading { text-align: center; padding: 60px; color: var(--text3); }
-    .error { text-align: center; padding: 60px; color: var(--rose); }
-
-    @media (max-width: 768px) {
-      .sidebar { display: none; }
-      .main { margin-left: 0; padding: 16px; }
-      .chart-row { grid-template-columns: 1fr; }
-      .video-row img { width: 80px; height: 45px; }
-      .stats-row { grid-template-columns: repeat(2, 1fr); }
-    }
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--bg);color:var(--t1);min-height:100vh}
+    .shell{display:flex;min-height:100vh}
+    .sb{width:210px;background:var(--s1);border-right:1px solid var(--bd);padding:20px 0;flex-shrink:0;position:fixed;height:100vh;overflow-y:auto;z-index:10}
+    .sb .logo{padding:0 16px 20px;font-size:15px;font-weight:700;letter-spacing:-.3px}.logo span{color:var(--blue)}
+    .ni{display:flex;align-items:center;gap:8px;padding:9px 16px;font-size:13px;color:var(--t2);cursor:pointer;transition:all .15s;border-left:3px solid transparent}
+    .ni:hover{color:var(--t1);background:var(--s2)}.ni.a{color:var(--t1);background:var(--s2);border-left-color:var(--blue)}
+    .ni svg{width:15px;height:15px;opacity:.6}.ni.a svg{opacity:1}
+    .sep{height:1px;background:var(--bd);margin:10px 16px}
+    .mn{margin-left:210px;flex:1;padding:24px 28px;max-width:1140px}
+    .ph{display:flex;justify-content:space-between;align-items:center;margin-bottom:22px}
+    .ph h1{font-size:20px;font-weight:700;letter-spacing:-.3px}
+    .btn{padding:6px 12px;border-radius:7px;border:1px solid var(--bd);background:var(--s1);color:var(--t2);font-size:11px;font-weight:500;cursor:pointer;transition:all .15s}
+    .btn:hover{background:var(--s2);color:var(--t1)}.btn-p{background:var(--blue);color:#fff;border-color:var(--blue)}.btn-p:hover{opacity:.9}
+    .card{background:var(--s1);border:1px solid var(--bd);border-radius:var(--r);padding:18px}
+    .grid{display:grid;gap:12px;margin-bottom:20px}
+    .g2{grid-template-columns:1fr 1fr}.g3{grid-template-columns:1fr 1fr 1fr}.g4{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}.g5{grid-template-columns:repeat(auto-fit,minmax(130px,1fr))}
+    .st .lb{font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:.7px;font-weight:600}
+    .st .vl{font-size:26px;font-weight:700;margin-top:3px;line-height:1}
+    .st .sb2{font-size:10px;color:var(--t3);margin-top:3px}
+    .fb{display:flex;align-items:center;gap:0;margin-bottom:20px;overflow-x:auto}
+    .fb .step{text-align:center;flex:1;min-width:80px}.fb .step .v{font-size:20px;font-weight:700}.fb .step .l{font-size:9px;color:var(--t3);text-transform:uppercase;letter-spacing:.5px;margin-top:2px}
+    .fb .arr{color:var(--t3);font-size:11px;padding:0 4px;text-align:center}.fb .arr .rt{color:var(--amber);font-weight:600;font-size:10px}
+    .tc{background:var(--s1);border:1px solid var(--bd);border-radius:var(--r);overflow:hidden;margin-bottom:20px}
+    .tc h3{font-size:12px;font-weight:600;color:var(--t2);padding:14px 16px 0}
+    table{width:100%;border-collapse:collapse}
+    th{text-align:left;padding:8px 16px;font-size:9px;color:var(--t3);text-transform:uppercase;letter-spacing:.7px;font-weight:600;border-bottom:1px solid var(--bd)}
+    td{padding:8px 16px;font-size:12px;border-bottom:1px solid var(--bd)}
+    tr:last-child td{border-bottom:none}tr:hover td{background:rgba(59,130,246,.03)}
+    .tg{display:inline-block;padding:1px 7px;border-radius:5px;font-size:10px;font-weight:600}
+    .tg-b{background:rgba(59,130,246,.12);color:#60a5fa}.tg-g{background:rgba(34,197,94,.12);color:#4ade80}
+    .tg-p{background:rgba(168,85,247,.12);color:#c084fc}.tg-a{background:rgba(245,158,11,.12);color:#fbbf24}
+    .tg-r{background:rgba(244,63,94,.12);color:#fb7185}.tg-c{background:rgba(6,182,212,.12);color:#22d3ee}
+    .grade{display:inline-block;width:24px;height:24px;border-radius:6px;text-align:center;line-height:24px;font-size:11px;font-weight:700}
+    .grade-A{background:rgba(34,197,94,.15);color:#4ade80}.grade-B{background:rgba(59,130,246,.15);color:#60a5fa}
+    .grade-C{background:rgba(245,158,11,.15);color:#fbbf24}.grade-D{background:rgba(100,116,139,.15);color:#94a3b8}
+    .mc{height:100px;display:flex;align-items:flex-end;gap:1px}.mc .b{flex:1;border-radius:2px 2px 0 0;min-width:2px;transition:opacity .15s}
+    .mc .b:hover{opacity:.8}.cf{display:flex;justify-content:space-between;font-size:9px;color:var(--t3);margin-top:3px}
+    .cc{background:var(--s1);border:1px solid var(--bd);border-radius:var(--r);padding:16px;margin-bottom:20px}
+    .cc h3{font-size:12px;font-weight:600;color:var(--t2);margin-bottom:10px}
+    .vr{display:flex;gap:12px;align-items:center;padding:10px 16px;border-bottom:1px solid var(--bd)}
+    .vr:last-child{border-bottom:none}.vr:hover{background:rgba(59,130,246,.03)}
+    .vr img{width:110px;height:62px;border-radius:5px;object-fit:cover;flex-shrink:0}
+    .vr .vi{flex:1;min-width:0}.vr .vt{font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .vr .vt a{color:var(--t1);text-decoration:none}.vr .vt a:hover{color:var(--blue)}
+    .vr .vm{display:flex;gap:12px;margin-top:3px;font-size:10px;color:var(--t3)}.vr .vm b{color:var(--t2);font-weight:600}
+    .em{text-align:center;padding:24px;color:var(--t3);font-size:12px}
+    .fg label{display:block;font-size:10px;color:var(--t3);margin:10px 0 3px;font-weight:600;text-transform:uppercase;letter-spacing:.5px}
+    .fg label:first-child{margin-top:0}
+    .fg input,.fg select{width:100%;padding:8px 12px;border-radius:7px;border:1px solid var(--bd);background:var(--bg);color:var(--t1);font-size:13px}
+    .fg select{appearance:auto}
+    .uo{margin-top:14px;padding:12px 44px 12px 12px;background:var(--bg);border-radius:7px;border:1px solid var(--bd);font-family:monospace;font-size:12px;word-break:break-all;color:var(--green);position:relative}
+    .cpb{position:absolute;top:8px;right:8px;padding:3px 8px;border-radius:5px;border:1px solid var(--bd);background:var(--s1);color:var(--t2);font-size:10px;cursor:pointer}
+    .cpb:hover{background:var(--s2)}.cpb.ok{background:rgba(34,197,94,.15);color:var(--green);border-color:rgba(34,197,94,.2)}
+    .hi{display:flex;justify-content:space-between;align-items:center;padding:6px 10px;background:var(--bg);border-radius:5px;margin-bottom:3px;font-size:11px;border:1px solid var(--bd)}
+    .hi .hc{color:var(--purple);font-weight:600;min-width:100px}.hi .hl{color:var(--t3);font-family:monospace;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin:0 10px}
+    .erow{display:flex;gap:16px;align-items:center;padding:10px 16px;border-bottom:1px solid var(--bd)}
+    .erow:last-child{border-bottom:none}.erow:hover{background:rgba(59,130,246,.03)}
+    .erow .ename{font-size:13px;font-weight:600;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .erow .estats{display:flex;gap:16px;font-size:11px;color:var(--t3)}.erow .estats b{color:var(--t2)}
+    .bar-h{display:flex;align-items:center;gap:6px;font-size:11px}
+    .bar-track{flex:1;height:6px;background:var(--s3);border-radius:3px;overflow:hidden}
+    .bar-fill{height:100%;border-radius:3px}
+    .af{max-width:340px}.af{margin:100px auto;background:var(--s1);padding:28px;border-radius:var(--r);border:1px solid var(--bd)}
+    .af h2{margin-bottom:14px;text-align:center;font-size:17px}
+    .af input{width:100%;padding:9px 12px;border-radius:7px;border:1px solid var(--bd);background:var(--bg);color:var(--t1);font-size:13px;margin-bottom:10px}
+    .af button{width:100%}.ld{text-align:center;padding:50px;color:var(--t3)}.er{text-align:center;padding:50px;color:var(--rose)}
+    @media(max-width:768px){.sb{display:none}.mn{margin-left:0;padding:14px}.g2,.g3{grid-template-columns:1fr}.vr img{width:70px;height:40px}}
   </style>
 </head>
 <body>
-  <div id="app"><div class="loading">Loading...</div></div>
+<div id="app"><div class="ld">Loading...</div></div>
+<script>
+const A=window.location.origin;
+let S=localStorage.getItem('ds')||new URLSearchParams(location.search).get('secret')||'';
+if(S)localStorage.setItem('ds',S);
+let T='overview';
 
-  <script>
-    const API = window.location.origin;
-    let secret = localStorage.getItem('ds') || new URLSearchParams(window.location.search).get('secret') || '';
-    if (secret) localStorage.setItem('ds', secret);
-    let tab = 'overview';
+function qs(s){return S?`${s}${s.includes('?')?'&':'?'}secret=${encodeURIComponent(S)}`:s}
+async function af(p){const r=await fetch(qs(`${A}${p}`));if(r.status===401){showAuth();throw new Error('auth')}if(!r.ok)throw new Error(r.status);return r.json()}
+function showAuth(){document.getElementById('app').innerHTML=`<div class="af"><h2>FunnelTrack</h2><input type="password" id="si" placeholder="Enter secret" autofocus /><button class="btn btn-p" onclick="doA()">Unlock</button></div>`;document.getElementById('si').addEventListener('keydown',e=>{if(e.key==='Enter')doA()})}
+function doA(){S=document.getElementById('si').value;localStorage.setItem('ds',S);go('overview')}
 
-    function qs(s) { return secret ? `${s}${s.includes('?')?'&':'?'}secret=${encodeURIComponent(secret)}` : s; }
-    async function api(path) {
-      const r = await fetch(qs(`${API}${path}`));
-      if (r.status === 401) { showAuth(); throw new Error('auth'); }
-      if (!r.ok) throw new Error(r.status);
-      return r.json();
-    }
+const I={
+  ov:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>',
+  yt:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22.54 6.42a2.78 2.78 0 00-1.94-2C18.88 4 12 4 12 4s-6.88 0-8.6.46a2.78 2.78 0 00-1.94 2A29 29 0 001 11.75a29 29 0 00.46 5.33A2.78 2.78 0 003.4 19.1c1.72.46 8.6.46 8.6.46s6.88 0 8.6-.46a2.78 2.78 0 001.94-2 29 29 0 00.46-5.25 29 29 0 00-.46-5.33z"/><polygon points="9.75 15.02 15.5 11.75 9.75 8.48" fill="currentColor" stroke="none"/></svg>',
+  em:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>',
+  sc:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>',
+  co:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>',
+  ac:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>',
+  ln:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>',
+};
 
-    function showAuth() {
-      document.getElementById('app').innerHTML = `
-        <div class="auth-form">
-          <h2>Dashboard</h2>
-          <input type="password" id="si" placeholder="Enter secret" autofocus />
-          <button class="btn btn-primary" onclick="doAuth()">Unlock</button>
-        </div>`;
-      document.getElementById('si').addEventListener('keydown', e => { if(e.key==='Enter') doAuth(); });
-    }
-    function doAuth() { secret=document.getElementById('si').value; localStorage.setItem('ds',secret); go('overview'); }
+function sh(c){return`<div class="shell"><div class="sb"><div class="logo">Funnel<span>Track</span></div>
+<div class="ni ${T==='overview'?'a':''}" onclick="go('overview')">${I.ov} Overview</div>
+<div class="ni ${T==='youtube'?'a':''}" onclick="go('youtube')">${I.yt} YouTube</div>
+<div class="ni ${T==='emails'?'a':''}" onclick="go('emails')">${I.em} Emails</div>
+<div class="ni ${T==='scoring'?'a':''}" onclick="go('scoring')">${I.sc} Quality Score</div>
+<div class="ni ${T==='costs'?'a':''}" onclick="go('costs')">${I.co} Costs & ROI</div>
+<div class="sep"></div>
+<div class="ni ${T==='activity'?'a':''}" onclick="go('activity')">${I.ac} Activity</div>
+<div class="ni ${T==='links'?'a':''}" onclick="go('links')">${I.ln} UTM Links</div>
+</div><div class="mn">${c}</div></div>`}
 
-    // Icons (inline SVG)
-    const icons = {
-      overview: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>',
-      youtube: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22.54 6.42a2.78 2.78 0 00-1.94-2C18.88 4 12 4 12 4s-6.88 0-8.6.46a2.78 2.78 0 00-1.94 2A29 29 0 001 11.75a29 29 0 00.46 5.33A2.78 2.78 0 003.4 19.1c1.72.46 8.6.46 8.6.46s6.88 0 8.6-.46a2.78 2.78 0 001.94-2 29 29 0 00.46-5.25 29 29 0 00-.46-5.33z"/><polygon points="9.75 15.02 15.5 11.75 9.75 8.48 9.75 15.02" fill="currentColor" stroke="none"/></svg>',
-      link: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>',
-      activity: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>',
-    };
+function go(t){T=t;const m={overview:pOv,youtube:pYt,emails:pEm,scoring:pSc,costs:pCo,activity:pAc,links:pLn};(m[t]||pOv)()}
+function N(n){if(n>=1e6)return(n/1e6).toFixed(1)+'M';if(n>=1e3)return(n/1e3).toFixed(1)+'K';return n.toLocaleString()}
+function $(n){return'$'+n.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}
+function P(a,b){return b>0?((a/b)*100).toFixed(1)+'%':'0%'}
+function mc(d,k,col,h=100){if(!d.length)return'<div class="mc" style="justify-content:center;color:var(--t3);font-size:11px;height:'+h+'px">No data</div>';const mx=Math.max(...d.map(x=>x[k]),1);return`<div class="mc" style="height:${h}px">${d.map(x=>`<div class="b" style="height:${Math.max(x[k]/mx*100,2)}%;background:${col}" title="${x.day||x.week}: ${x[k]}"></div>`).join('')}</div><div class="cf"><span>${d[0].day||d[0].week||''}</span><span>${d[d.length-1].day||d[d.length-1].week||''}</span></div>`}
+function bar(val,max,col){const w=max>0?Math.max(val/max*100,1):0;return`<div class="bar-h"><div class="bar-track"><div class="bar-fill" style="width:${w}%;background:${col}"></div></div><span>${val.toFixed(1)}%</span></div>`}
+function cp(t,b){navigator.clipboard.writeText(t).then(()=>{const o=b.textContent;b.textContent='Copied!';b.classList.add('ok');setTimeout(()=>{b.textContent=o;b.classList.remove('ok')},1400)})}
 
-    function shell(content) {
-      return `<div class="shell">
-        <div class="sidebar">
-          <div class="logo">Funnel<span>Track</span></div>
-          <div class="nav-item ${tab==='overview'?'active':''}" onclick="go('overview')">${icons.overview} Overview</div>
-          <div class="nav-item ${tab==='youtube'?'active':''}" onclick="go('youtube')">${icons.youtube} YouTube</div>
-          <div class="nav-item ${tab==='activity'?'active':''}" onclick="go('activity')">${icons.activity} Activity</div>
-          <div class="nav-sep"></div>
-          <div class="nav-item ${tab==='links'?'active':''}" onclick="go('links')">${icons.link} UTM Links</div>
-        </div>
-        <div class="main">${content}</div>
-      </div>`;
-    }
+// ============ OVERVIEW ============
+async function pOv(){
+  document.getElementById('app').innerHTML=sh('<div class="ld">Loading...</div>');
+  try{
+    const[s,ch,f]=await Promise.all([af('/api/dashboard/stats'),af('/api/dashboard/charts'),af('/api/dashboard/funnel')]);
+    rOv(s,ch,f);
+  }catch(e){if(e.message!=='auth')document.querySelector('.mn').innerHTML=`<div class="er">${e.message}</div>`}
+}
+function rOv(s,ch,f){
+  const or=P(s.totalSubscribers,s.totalPageviews),br=P(s.totalPurchases,s.totalSubscribers);
+  const fc=f.campaigns||[];
+  const cr=fc.length>0?fc.map(c=>{
+    const roi=c.roi!==null&&c.roi!==undefined?`<span class="tg ${c.roi>=0?'tg-g':'tg-r'}">${c.roi>=0?'+':''}${c.roi}%</span>`:'<span style="color:var(--t3)">-</span>';
+    return`<tr><td><span class="grade grade-${c.grade}">${c.grade}</span></td><td><span class="tg tg-p">${c.campaign}</span></td><td><span class="tg tg-b">${c.source}</span></td><td>${N(c.pageviews||0)}</td><td>${c.subscribers}</td><td>${c.buyers}</td><td>${$(c.revenue)}</td><td>${$(c.revenuePerSub||0)}</td><td>${roi}</td><td>${c.conversionRate}</td></tr>`
+  }).join(''):'<tr><td colspan="10" class="em">No campaign data yet</td></tr>';
 
-    function go(t) { tab=t; if(t==='overview') loadOverview(); else if(t==='youtube') loadYouTube(); else if(t==='activity') loadActivity(); else if(t==='links') showLinks(); }
+  document.querySelector('.mn').innerHTML=`
+    <div class="ph"><h1>Overview</h1><div><button class="btn" onclick="go('overview')">Refresh</button></div></div>
+    <div class="card fb" style="padding:14px 18px">
+      <div class="step"><div class="v" style="color:var(--blue)">${N(s.totalPageviews)}</div><div class="l">Views</div></div>
+      <div class="arr">&rarr;<br><span class="rt">${or}</span></div>
+      <div class="step"><div class="v" style="color:var(--green)">${N(s.totalSubscribers)}</div><div class="l">Subs</div></div>
+      <div class="arr">&rarr;<br><span class="rt">${br}</span></div>
+      <div class="step"><div class="v" style="color:var(--purple)">${N(s.totalPurchases)}</div><div class="l">Sales</div></div>
+      <div class="arr">&rarr;</div>
+      <div class="step"><div class="v" style="color:var(--amber)">${$(s.totalRevenue)}</div><div class="l">Revenue</div></div>
+    </div>
+    <div class="grid g4">
+      <div class="card st"><div class="lb">Opt-in Rate</div><div class="vl" style="color:var(--green)">${or}</div><div class="sb2">view &rarr; sub</div></div>
+      <div class="card st"><div class="lb">Purchase Rate</div><div class="vl" style="color:var(--purple)">${br}</div><div class="sb2">sub &rarr; buyer</div></div>
+      <div class="card st"><div class="lb">Rev / Subscriber</div><div class="vl" style="color:var(--amber)">${$(s.totalSubscribers>0?s.totalRevenue/s.totalSubscribers:0)}</div><div class="sb2">lifetime value</div></div>
+      <div class="card st"><div class="lb">Total Events</div><div class="vl" style="color:var(--cyan)">${N(s.totalEvents)}</div><div class="sb2">tracked actions</div></div>
+    </div>
+    <div class="grid g2">
+      <div class="cc"><h3>Pageviews (30d)</h3>${mc(ch.pageviews,'views','var(--blue)')}</div>
+      <div class="cc"><h3>New Subscribers (30d)</h3>${mc(ch.subscribers,'count','var(--green)')}</div>
+    </div>
+    <div class="tc"><h3>Campaign Performance</h3>
+      <table><thead><tr><th></th><th>Campaign</th><th>Source</th><th>Views</th><th>Subs</th><th>Sales</th><th>Revenue</th><th>Rev/Sub</th><th>ROI</th><th>Conv.</th></tr></thead>
+      <tbody>${cr}</tbody></table>
+    </div>`;
+}
 
-    function fmtN(n) { if(n>=1e6) return (n/1e6).toFixed(1)+'M'; if(n>=1e3) return (n/1e3).toFixed(1)+'K'; return n.toLocaleString(); }
-    function fmtMoney(n) { return '$'+n.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}); }
-    function pct(a,b) { return b>0?((a/b)*100).toFixed(1)+'%':'0%'; }
+// ============ YOUTUBE ============
+async function pYt(){
+  document.getElementById('app').innerHTML=sh('<div class="ld">Loading YouTube...</div>');
+  try{const d=await af('/api/dashboard/youtube');rYt(d)}catch(e){if(e.message!=='auth')document.querySelector('.mn').innerHTML=`<div class="er">${e.message}</div>`}
+}
+function rYt(d){
+  const c=d.channel;
+  const cs=c?`<div class="grid g3">
+    <div class="card st"><div class="lb">Subscribers</div><div class="vl" style="color:var(--rose)">${N(c.subscriberCount)}</div></div>
+    <div class="card st"><div class="lb">Total Views</div><div class="vl" style="color:var(--blue)">${N(c.viewCount)}</div></div>
+    <div class="card st"><div class="lb">Videos</div><div class="vl" style="color:var(--purple)">${N(c.videoCount)}</div></div>
+  </div>`:'';
+  const vs=(d.videos||[]).map(v=>`<div class="vr"><img src="${v.thumbnail}" loading="lazy"/><div class="vi"><div class="vt"><a href="https://youtube.com/watch?v=${v.videoId}" target="_blank">${v.title}</a></div><div class="vm"><span><b>${N(v.views)}</b> views</span><span><b>${N(v.likes)}</b> likes</span><span><b>${N(v.comments)}</b> comments</span><span>${new Date(v.publishedAt).toLocaleDateString()}</span></div></div></div>`).join('')||'<div class="em">No videos</div>';
+  document.querySelector('.mn').innerHTML=`<div class="ph"><h1>YouTube</h1><button class="btn" onclick="go('youtube')">Refresh</button></div>${cs}<div class="tc"><h3>Recent Videos</h3>${vs}</div>`;
+}
 
-    function miniChart(data, key, color, h=120) {
-      if(!data.length) return '<div class="mini-chart" style="justify-content:center;color:var(--text3);font-size:12px;">No data yet</div>';
-      const max = Math.max(...data.map(d=>d[key]),1);
-      const bars = data.map(d=>{
-        const pct = Math.max((d[key]/max)*100, 2);
-        return `<div class="mini-bar" style="height:${pct}%;background:${color}" title="${d.day}: ${d[key]}"></div>`;
-      }).join('');
-      return `<div class="mini-chart" style="height:${h}px">${bars}</div>
-        <div class="chart-footer"><span>${data[0].day}</span><span>${data[data.length-1].day}</span></div>`;
-    }
+// ============ EMAILS ============
+async function pEm(){
+  document.getElementById('app').innerHTML=sh('<div class="ld">Loading email data...</div>');
+  try{const d=await af('/api/dashboard/emails');rEm(d)}catch(e){if(e.message!=='auth')document.querySelector('.mn').innerHTML=`<div class="er">${e.message}</div>`}
+}
+function rEm(d){
+  const g=d.group;
+  const gs=g?`<div class="grid g4">
+    <div class="card st"><div class="lb">List Size</div><div class="vl" style="color:var(--green)">${N(g.activeCount)}</div></div>
+    <div class="card st"><div class="lb">Emails Sent</div><div class="vl" style="color:var(--blue)">${N(g.sentCount)}</div></div>
+    <div class="card st"><div class="lb">Open Rate</div><div class="vl" style="color:var(--amber)">${(g.openRate*100).toFixed(1)}%</div></div>
+    <div class="card st"><div class="lb">Click Rate</div><div class="vl" style="color:var(--cyan)">${(g.clickRate*100).toFixed(1)}%</div></div>
+  </div>`:'';
+  const cs=(d.campaigns||[]);
+  const maxOpen=Math.max(...cs.map(c=>c.stats.openRate),1);
+  const rows=cs.length>0?cs.map(c=>`<div class="erow">
+    <div class="ename">${c.name}</div>
+    <div class="estats">
+      <span><b>${N(c.stats.sent)}</b> sent</span>
+      <span><b>${N(c.stats.opens)}</b> opens</span>
+      <span><b>${N(c.stats.clicks)}</b> clicks</span>
+    </div>
+    <div style="width:120px">${bar(c.stats.openRate*100,60,'var(--amber)')}</div>
+    <div style="width:120px">${bar(c.stats.clickRate*100,20,'var(--cyan)')}</div>
+  </div>`).join(''):'<div class="em">No email campaigns sent yet</div>';
+  document.querySelector('.mn').innerHTML=`<div class="ph"><h1>Email Performance</h1><button class="btn" onclick="go('emails')">Refresh</button></div>${gs}<div class="tc"><h3>Campaigns</h3><div style="display:flex;padding:8px 16px 4px;font-size:9px;color:var(--t3);gap:16px;text-transform:uppercase;letter-spacing:.7px"><div style="flex:1">Name</div><div style="width:200px">Stats</div><div style="width:120px">Open Rate</div><div style="width:120px">Click Rate</div></div>${rows}</div>`;
+}
 
-    // ============ OVERVIEW ============
-    async function loadOverview() {
-      document.getElementById('app').innerHTML = shell('<div class="loading">Loading...</div>');
-      try {
-        const [stats, campaigns, charts, funnel] = await Promise.all([
-          api('/api/dashboard/stats'),
-          api('/api/dashboard/campaigns'),
-          api('/api/dashboard/charts'),
-          api('/api/dashboard/funnel'),
-        ]);
-        renderOverview(stats, campaigns, charts, funnel);
-      } catch(e) { if(e.message!=='auth') document.getElementById('app').innerHTML = shell(`<div class="error">${e.message}</div>`); }
-    }
+// ============ SCORING ============
+async function pSc(){
+  document.getElementById('app').innerHTML=sh('<div class="ld">Loading scores...</div>');
+  try{const d=await af('/api/dashboard/scoring');rSc(d)}catch(e){if(e.message!=='auth')document.querySelector('.mn').innerHTML=`<div class="er">${e.message}</div>`}
+}
+function rSc(d){
+  const rows=d.length>0?d.map(s=>`<tr>
+    <td><span class="grade grade-${s.grade}">${s.grade}</span></td>
+    <td><span class="tg tg-p">${s.campaign}</span></td>
+    <td><span class="tg tg-b">${s.source}</span></td>
+    <td>${s.totalSubs}</td>
+    <td>${s.buyers}</td>
+    <td>${s.buyRate.toFixed(1)}%</td>
+    <td>${$(s.revenue)}</td>
+    <td style="font-weight:700;color:var(--amber)">${$(s.revPerSub)}</td>
+  </tr>`).join(''):'<tr><td colspan="8" class="em">No data yet</td></tr>';
+  document.querySelector('.mn').innerHTML=`<div class="ph"><h1>Subscriber Quality Score</h1><button class="btn" onclick="go('scoring')">Refresh</button></div>
+  <div class="card" style="margin-bottom:16px;font-size:12px;color:var(--t2)">
+    <b>How scoring works:</b> Each campaign gets a grade based on revenue per subscriber.
+    <span class="grade grade-A" style="margin-left:8px">A</span> $5+/sub
+    <span class="grade grade-B" style="margin-left:4px">B</span> $2-5/sub
+    <span class="grade grade-C" style="margin-left:4px">C</span> Has buyers
+    <span class="grade grade-D" style="margin-left:4px">D</span> No buyers yet
+  </div>
+  <div class="tc"><table><thead><tr><th></th><th>Campaign</th><th>Source</th><th>Subs</th><th>Buyers</th><th>Buy Rate</th><th>Revenue</th><th>Rev/Sub</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+}
 
-    function renderOverview(stats, campaigns, charts, funnel) {
-      const optRate = pct(stats.totalSubscribers, stats.totalPageviews);
-      const buyRate = pct(stats.totalPurchases, stats.totalSubscribers);
+// ============ COSTS & ROI ============
+async function pCo(){
+  document.getElementById('app').innerHTML=sh('<div class="ld">Loading costs...</div>');
+  try{const[f,e]=await Promise.all([af('/api/dashboard/funnel'),af('/api/dashboard/costs')]);rCo(f,e)}catch(e){if(e.message!=='auth')document.querySelector('.mn').innerHTML=`<div class="er">${e.message}</div>`}
+}
+function rCo(f,entries){
+  const fc=f.campaigns||[];
+  const roi=fc.filter(c=>c.spend>0).map(c=>`<tr>
+    <td><span class="tg tg-p">${c.campaign}</span></td>
+    <td>${$(c.spend)}</td>
+    <td>${$(c.revenue)}</td>
+    <td>${$(c.revenue-c.spend)}</td>
+    <td><span class="tg ${c.roi>=0?'tg-g':'tg-r'}">${c.roi>=0?'+':''}${c.roi}%</span></td>
+    <td>${c.subscribers}</td>
+    <td>${$(c.spend>0&&c.subscribers>0?c.spend/c.subscribers:0)}</td>
+  </tr>`).join('')||'<tr><td colspan="7" class="em">No costs tracked yet. Add a cost below.</td></tr>';
+  const eh=entries.length>0?entries.map(e=>`<tr><td><span class="tg tg-p">${e.campaign}</span></td><td>${$(e.amount)}</td><td>${e.description||'-'}</td><td>${e.date}</td></tr>`).join(''):'<tr><td colspan="4" class="em">No entries</td></tr>';
+  document.querySelector('.mn').innerHTML=`<div class="ph"><h1>Costs & ROI</h1><button class="btn" onclick="go('costs')">Refresh</button></div>
+  <div class="tc"><h3>ROI by Campaign</h3><table><thead><tr><th>Campaign</th><th>Spend</th><th>Revenue</th><th>Profit</th><th>ROI</th><th>Subs</th><th>Cost/Sub</th></tr></thead><tbody>${roi}</tbody></table></div>
+  <div class="grid g2">
+    <div class="card fg">
+      <h3 style="font-size:13px;font-weight:600;color:var(--t2);margin-bottom:10px">Add Cost</h3>
+      <label>Campaign</label><input type="text" id="cc" placeholder="e.g. revision-technique"/>
+      <label>Amount ($)</label><input type="number" id="ca" placeholder="50.00" step="0.01"/>
+      <label>Description</label><input type="text" id="cd" placeholder="YouTube ad spend"/>
+      <label>Date</label><input type="date" id="cdt" value="${new Date().toISOString().split('T')[0]}"/>
+      <button class="btn btn-p" style="margin-top:12px;width:100%" onclick="addCost()">Add Cost</button>
+    </div>
+    <div class="tc"><h3>Recent Entries</h3><table><thead><tr><th>Campaign</th><th>Amount</th><th>Note</th><th>Date</th></tr></thead><tbody>${eh}</tbody></table></div>
+  </div>`;
+}
+async function addCost(){
+  const c=document.getElementById('cc').value.trim();
+  const a=document.getElementById('ca').value;
+  const d=document.getElementById('cd').value;
+  const dt=document.getElementById('cdt').value;
+  if(!c||!a){alert('Campaign and amount required');return}
+  await fetch(qs(`${A}/api/dashboard/costs`),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({campaign:c,amount:parseFloat(a),description:d,date:dt})});
+  go('costs');
+}
 
-      // Campaign table with pageviews
-      const fc = funnel.campaigns || campaigns;
-      const campRows = fc.length > 0 ? fc.map(c => `<tr>
-        <td><span class="tag tag-purple">${c.campaign}</span></td>
-        <td><span class="tag tag-blue">${c.source}</span></td>
-        <td>${c.pageviews !== undefined ? fmtN(c.pageviews) : '-'}</td>
-        <td>${c.subscribers}</td>
-        <td>${c.buyers}</td>
-        <td>${fmtMoney(c.revenue)}</td>
-        <td>${c.revenuePerSub !== undefined ? fmtMoney(c.revenuePerSub) : '-'}</td>
-        <td>${c.conversionRate}</td>
-      </tr>`).join('') : '<tr><td colspan="8" class="empty-state">No data yet</td></tr>';
+// ============ ACTIVITY ============
+async function pAc(){
+  document.getElementById('app').innerHTML=sh('<div class="ld">Loading...</div>');
+  try{const d=await af('/api/dashboard/activity');rAc(d)}catch(e){if(e.message!=='auth')document.querySelector('.mn').innerHTML=`<div class="er">${e.message}</div>`}
+}
+function rAc(d){
+  const rows=d.length>0?d.map(a=>{const c=a.event==='optin_submit'?'tg-g':a.event==='purchase'?'tg-a':'tg-b';return`<tr><td><span class="tg ${c}">${a.event}</span></td><td style="font-family:monospace;font-size:11px">${a.visitor}</td><td>${a.email||'-'}</td><td style="color:var(--t3);font-size:11px">${new Date(a.time+'Z').toLocaleString()}</td></tr>`}).join(''):'<tr><td colspan="4" class="em">No events yet</td></tr>';
+  document.querySelector('.mn').innerHTML=`<div class="ph"><h1>Activity</h1><button class="btn" onclick="go('activity')">Refresh</button></div>
+  <div class="tc"><table><thead><tr><th>Event</th><th>Visitor</th><th>Email</th><th>Time</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+}
 
-      document.querySelector('.main').innerHTML = `
-        <div class="page-header">
-          <h1>Overview</h1>
-          <div class="header-actions"><button class="btn" onclick="go('overview')">Refresh</button></div>
-        </div>
+// ============ UTM LINKS ============
+const SITE='https://goddardsecrets.com/';
+function gH(){try{return JSON.parse(localStorage.getItem('uh')||'[]')}catch{return[]}}
+function sH(h){localStorage.setItem('uh',JSON.stringify(h.slice(0,25)))}
+function pLn(){
+  const h=gH();
+  const hh=h.length>0?h.map(x=>`<div class="hi"><span class="hc">${x.c}</span><span class="hl">${x.u}</span><button class="btn" style="padding:2px 8px;font-size:10px" onclick="cp('${x.u}',this)">Copy</button></div>`).join(''):'<div style="color:var(--t3);font-size:12px;padding:6px 0">No links yet</div>';
+  document.getElementById('app').innerHTML=sh(`<div class="ph"><h1>UTM Link Generator</h1></div>
+  <div class="card fg" style="max-width:520px">
+    <label>Campaign Name</label><input type="text" id="uc" placeholder="e.g. revision-technique" oninput="uP()"/>
+    <label>Source</label><select id="us" onchange="uP()"><option value="youtube">YouTube</option><option value="instagram">Instagram</option><option value="tiktok">TikTok</option><option value="twitter">Twitter / X</option><option value="facebook">Facebook</option><option value="email">Email</option></select>
+    <label>Medium</label><select id="um" onchange="uP()"><option value="">Auto</option><option value="organic">Organic</option><option value="paid">Paid</option><option value="description">Video description</option></select>
+    <div class="uo" id="uo" style="display:none"><span id="uu"></span><button class="cpb" id="ucb" onclick="cpG()">Copy</button></div>
+  </div>
+  <div style="max-width:520px;margin-top:20px"><h3 style="font-size:12px;color:var(--t2);margin-bottom:6px">Recent Links</h3>${hh}</div>`);
+}
+function uP(){const c=document.getElementById('uc').value.trim().toLowerCase().replace(/[^a-z0-9-]/g,'-').replace(/-+/g,'-');const s=document.getElementById('us').value;const m=document.getElementById('um').value;if(!c){document.getElementById('uo').style.display='none';return}let u=SITE+'?utm_source='+s+'&utm_campaign='+c;if(m)u+='&utm_medium='+m;document.getElementById('uu').textContent=u;document.getElementById('uo').style.display='block';const h=gH();if(!h.find(x=>x.u===u)){h.unshift({c,s,u,t:Date.now()});sH(h)}}
+function cpG(){cp(document.getElementById('uu').textContent,document.getElementById('ucb'))}
 
-        <div class="funnel-bar">
-          <div class="fb-step"><div class="fb-val" style="color:var(--blue)">${fmtN(stats.totalPageviews)}</div><div class="fb-label">Pageviews</div></div>
-          <div class="fb-arrow">&rarr;<br><span class="fb-rate">${optRate}</span></div>
-          <div class="fb-step"><div class="fb-val" style="color:var(--green)">${fmtN(stats.totalSubscribers)}</div><div class="fb-label">Subscribers</div></div>
-          <div class="fb-arrow">&rarr;<br><span class="fb-rate">${buyRate}</span></div>
-          <div class="fb-step"><div class="fb-val" style="color:var(--purple)">${fmtN(stats.totalPurchases)}</div><div class="fb-label">Purchases</div></div>
-          <div class="fb-arrow">&rarr;</div>
-          <div class="fb-step"><div class="fb-val" style="color:var(--amber)">${fmtMoney(stats.totalRevenue)}</div><div class="fb-label">Revenue</div></div>
-        </div>
-
-        <div class="stats-row">
-          <div class="stat"><div class="label">Opt-in Rate</div><div class="val" style="color:var(--green)">${optRate}</div><div class="sub">page &rarr; subscriber</div></div>
-          <div class="stat"><div class="label">Purchase Rate</div><div class="val" style="color:var(--purple)">${buyRate}</div><div class="sub">subscriber &rarr; buyer</div></div>
-          <div class="stat"><div class="label">Rev / Subscriber</div><div class="val" style="color:var(--amber)">${fmtMoney(stats.totalSubscribers>0?stats.totalRevenue/stats.totalSubscribers:0)}</div><div class="sub">lifetime value</div></div>
-          <div class="stat"><div class="label">Total Events</div><div class="val" style="color:var(--cyan)">${fmtN(stats.totalEvents)}</div><div class="sub">all tracked actions</div></div>
-        </div>
-
-        <div class="chart-row">
-          <div class="chart-card"><h3>Pageviews (30 days)</h3>${miniChart(charts.pageviews, 'views', 'var(--blue)')}</div>
-          <div class="chart-card"><h3>New Subscribers (30 days)</h3>${miniChart(charts.subscribers, 'count', 'var(--green)')}</div>
-        </div>
-
-        <div class="table-card">
-          <h3>Campaign Performance</h3>
-          <table>
-            <thead><tr><th>Campaign</th><th>Source</th><th>Views</th><th>Subs</th><th>Buyers</th><th>Revenue</th><th>Rev/Sub</th><th>Conv.</th></tr></thead>
-            <tbody>${campRows}</tbody>
-          </table>
-        </div>
-      `;
-    }
-
-    // ============ YOUTUBE ============
-    async function loadYouTube() {
-      document.getElementById('app').innerHTML = shell('<div class="loading">Loading YouTube data...</div>');
-      try {
-        const data = await api('/api/dashboard/youtube');
-        renderYouTube(data);
-      } catch(e) { if(e.message!=='auth') document.querySelector('.main').innerHTML = `<div class="error">${e.message}</div>`; }
-    }
-
-    function renderYouTube(data) {
-      const ch = data.channel;
-      const channelHtml = ch ? `<div class="stats-row">
-        <div class="stat"><div class="label">Subscribers</div><div class="val" style="color:var(--rose)">${fmtN(ch.subscriberCount)}</div></div>
-        <div class="stat"><div class="label">Total Views</div><div class="val" style="color:var(--blue)">${fmtN(ch.viewCount)}</div></div>
-        <div class="stat"><div class="label">Videos</div><div class="val" style="color:var(--purple)">${fmtN(ch.videoCount)}</div></div>
-      </div>` : '';
-
-      const vids = (data.videos||[]).map(v => `
-        <div class="video-row">
-          <img src="${v.thumbnail}" alt="" loading="lazy"/>
-          <div class="vid-info">
-            <div class="vid-title"><a href="https://youtube.com/watch?v=${v.videoId}" target="_blank">${v.title}</a></div>
-            <div class="vid-meta">
-              <span><b>${fmtN(v.views)}</b> views</span>
-              <span><b>${fmtN(v.likes)}</b> likes</span>
-              <span><b>${fmtN(v.comments)}</b> comments</span>
-              <span>${new Date(v.publishedAt).toLocaleDateString()}</span>
-            </div>
-          </div>
-        </div>
-      `).join('') || '<div class="empty-state">No videos found</div>';
-
-      document.querySelector('.main').innerHTML = `
-        <div class="page-header"><h1>YouTube</h1><div class="header-actions"><button class="btn" onclick="go('youtube')">Refresh</button></div></div>
-        ${channelHtml}
-        <div class="table-card"><h3>Recent Videos</h3>${vids}</div>
-      `;
-    }
-
-    // ============ ACTIVITY ============
-    async function loadActivity() {
-      document.getElementById('app').innerHTML = shell('<div class="loading">Loading...</div>');
-      try {
-        const activity = await api('/api/dashboard/activity');
-        renderActivity(activity);
-      } catch(e) { if(e.message!=='auth') document.querySelector('.main').innerHTML = `<div class="error">${e.message}</div>`; }
-    }
-
-    function renderActivity(activity) {
-      const rows = activity.length > 0 ? activity.map(a => {
-        const cls = a.event==='optin_submit'?'tag-green':a.event==='purchase'?'tag-amber':'tag-blue';
-        return `<tr><td><span class="tag ${cls}">${a.event}</span></td><td style="font-family:monospace;font-size:12px;">${a.visitor}</td><td>${a.email||'-'}</td><td style="color:var(--text3)">${new Date(a.time+'Z').toLocaleString()}</td></tr>`;
-      }).join('') : '<tr><td colspan="4" class="empty-state">No events yet</td></tr>';
-
-      document.querySelector('.main').innerHTML = `
-        <div class="page-header"><h1>Activity Feed</h1><div class="header-actions"><button class="btn" onclick="go('activity')">Refresh</button></div></div>
-        <div class="table-card">
-          <table><thead><tr><th>Event</th><th>Visitor</th><th>Email</th><th>Time</th></tr></thead><tbody>${rows}</tbody></table>
-        </div>
-      `;
-    }
-
-    // ============ UTM LINKS ============
-    const SITE = 'https://goddardsecrets.com/';
-    function getHist(){try{return JSON.parse(localStorage.getItem('utm_h')||'[]')}catch(e){return[]}}
-    function saveHist(h){localStorage.setItem('utm_h',JSON.stringify(h.slice(0,20)))}
-
-    function showLinks() {
-      const hist = getHist();
-      const hHtml = hist.length>0?hist.map(h=>`
-        <div class="utm-history-item">
-          <span class="camp">${h.c}</span>
-          <span class="lnk">${h.u}</span>
-          <button class="btn" style="padding:2px 10px;font-size:11px;" onclick="cpTxt('${h.u}',this)">Copy</button>
-        </div>
-      `).join(''):'<div style="color:var(--text3);font-size:13px;padding:8px 0;">No links yet. Generate one above.</div>';
-
-      document.getElementById('app').innerHTML = shell(`
-        <div class="page-header"><h1>UTM Link Generator</h1></div>
-        <div class="card utm-gen">
-          <label>Campaign Name</label>
-          <input type="text" id="uc" placeholder="e.g. revision-technique, sleep-manifestation" oninput="utmPreview()"/>
-          <label>Source</label>
-          <select id="us" onchange="utmPreview()">
-            <option value="youtube">YouTube</option><option value="instagram">Instagram</option>
-            <option value="tiktok">TikTok</option><option value="twitter">Twitter / X</option>
-            <option value="facebook">Facebook</option><option value="email">Email</option>
-          </select>
-          <label>Medium</label>
-          <select id="um" onchange="utmPreview()">
-            <option value="">Auto</option><option value="organic">Organic</option>
-            <option value="paid">Paid</option><option value="description">Video description</option>
-          </select>
-          <div class="utm-output" id="uo" style="display:none"><span id="uu"></span><button class="copy-btn" id="ucb" onclick="cpGen()">Copy</button></div>
-        </div>
-        <div style="max-width:560px;margin-top:24px;">
-          <h3 style="font-size:13px;color:var(--text2);margin-bottom:8px;">Recent Links</h3>
-          ${hHtml}
-        </div>
-      `);
-    }
-
-    function utmPreview(){
-      const c=document.getElementById('uc').value.trim().toLowerCase().replace(/[^a-z0-9-]/g,'-').replace(/-+/g,'-');
-      const s=document.getElementById('us').value;
-      const m=document.getElementById('um').value;
-      if(!c){document.getElementById('uo').style.display='none';return}
-      let u=SITE+'?utm_source='+s+'&utm_campaign='+c;
-      if(m)u+='&utm_medium='+m;
-      document.getElementById('uu').textContent=u;
-      document.getElementById('uo').style.display='block';
-      const h=getHist();if(!h.find(x=>x.u===u)){h.unshift({c,s,u,t:Date.now()});saveHist(h)}
-    }
-    function cpGen(){cpTxt(document.getElementById('uu').textContent,document.getElementById('ucb'))}
-    function cpTxt(t,b){navigator.clipboard.writeText(t).then(()=>{const o=b.textContent;b.textContent='Copied!';b.classList.add('copied');setTimeout(()=>{b.textContent=o;b.classList.remove('copied')},1500)})}
-
-    // Boot
-    go('overview');
-  </script>
+go('overview');
+</script>
 </body>
 </html>

@@ -62,6 +62,17 @@ CREATE INDEX IF NOT EXISTS idx_events_name ON events(event_name);
 CREATE INDEX IF NOT EXISTS idx_events_visitor ON events(visitor_id);
 CREATE INDEX IF NOT EXISTS idx_subscribers_email ON subscribers(email);
 CREATE INDEX IF NOT EXISTS idx_purchases_email ON purchases(email);
+
+CREATE TABLE IF NOT EXISTS campaign_costs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    utm_campaign TEXT NOT NULL,
+    amount_cents INTEGER NOT NULL,
+    description TEXT,
+    spend_date TEXT NOT NULL DEFAULT (date('now')),
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_campaign_costs_campaign ON campaign_costs(utm_campaign);
 `;
 
 export async function ensureSchema(): Promise<void> {
