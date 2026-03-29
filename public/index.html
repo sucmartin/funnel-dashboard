@@ -173,13 +173,52 @@ async function pYt(){
 }
 function rYt(d){
   const c=d.channel;
-  const cs=c?`<div class="grid g3">
-    <div class="card st"><div class="lb">Subscribers</div><div class="vl" style="color:var(--rose)">${N(c.subscriberCount)}</div></div>
+  const cs=c?`<div class="grid g5">
+    <div class="card st"><div class="lb">YT Subscribers</div><div class="vl" style="color:var(--rose)">${N(c.subscriberCount)}</div></div>
     <div class="card st"><div class="lb">Total Views</div><div class="vl" style="color:var(--blue)">${N(c.viewCount)}</div></div>
     <div class="card st"><div class="lb">Videos</div><div class="vl" style="color:var(--purple)">${N(c.videoCount)}</div></div>
+    <div class="card st"><div class="lb">Funnel Opt-ins</div><div class="vl" style="color:var(--green)">${(d.videos||[]).reduce((a,v)=>a+(v.funnel?.subscribers||0),0)}</div></div>
+    <div class="card st"><div class="lb">Funnel Revenue</div><div class="vl" style="color:var(--amber)">${$((d.videos||[]).reduce((a,v)=>a+(v.funnel?.revenue||0),0))}</div></div>
   </div>`:'';
-  const vs=(d.videos||[]).map(v=>`<div class="vr"><img src="${v.thumbnail}" loading="lazy"/><div class="vi"><div class="vt"><a href="https://youtube.com/watch?v=${v.videoId}" target="_blank">${v.title}</a></div><div class="vm"><span><b>${N(v.views)}</b> views</span><span><b>${N(v.likes)}</b> likes</span><span><b>${N(v.comments)}</b> comments</span><span>${new Date(v.publishedAt).toLocaleDateString()}</span></div></div></div>`).join('')||'<div class="em">No videos</div>';
-  document.querySelector('.mn').innerHTML=`<div class="ph"><h1>YouTube</h1><button class="btn" onclick="go('youtube')">Refresh</button></div>${cs}<div class="tc"><h3>Recent Videos</h3>${vs}</div>`;
+
+  const vs=(d.videos||[]).map(v=>{
+    const f=v.funnel||{};
+    const hasData=f.clicks>0||f.subscribers>0;
+    const linked=f.campaign?`<span class="tg tg-g" style="font-size:9px">Tracked</span>`:`<span class="tg" style="background:rgba(100,116,139,.1);color:var(--t3);font-size:9px">No UTM</span>`;
+    return`<div class="vr" style="gap:14px;padding:14px 16px">
+      <img src="${v.thumbnail}" loading="lazy" style="width:140px;height:79px"/>
+      <div class="vi" style="flex:1">
+        <div style="display:flex;align-items:center;gap:8px">
+          <div class="vt" style="flex:1"><a href="https://youtube.com/watch?v=${v.videoId}" target="_blank">${v.title}</a></div>
+          ${linked}
+        </div>
+        <div style="display:flex;gap:0;margin-top:8px">
+          <div style="flex:1;text-align:center;padding:6px 0;background:var(--bg);border-radius:6px 0 0 6px;border:1px solid var(--bd)">
+            <div style="font-size:16px;font-weight:700;color:var(--blue)">${N(v.views)}</div>
+            <div style="font-size:9px;color:var(--t3);text-transform:uppercase">Views</div>
+          </div>
+          <div style="flex:1;text-align:center;padding:6px 0;background:var(--bg);border-left:none;border:1px solid var(--bd);border-left:0">
+            <div style="font-size:16px;font-weight:700;color:var(--cyan)">${N(f.clicks||0)}</div>
+            <div style="font-size:9px;color:var(--t3);text-transform:uppercase">Clicks</div>
+          </div>
+          <div style="flex:1;text-align:center;padding:6px 0;background:var(--bg);border:1px solid var(--bd);border-left:0">
+            <div style="font-size:16px;font-weight:700;color:var(--green)">${f.subscribers||0}</div>
+            <div style="font-size:9px;color:var(--t3);text-transform:uppercase">Opt-ins</div>
+          </div>
+          <div style="flex:1;text-align:center;padding:6px 0;background:var(--bg);border:1px solid var(--bd);border-left:0">
+            <div style="font-size:16px;font-weight:700;color:var(--purple)">${f.buyers||0}</div>
+            <div style="font-size:9px;color:var(--t3);text-transform:uppercase">Sales</div>
+          </div>
+          <div style="flex:1;text-align:center;padding:6px 0;background:var(--bg);border-radius:0 6px 6px 0;border:1px solid var(--bd);border-left:0">
+            <div style="font-size:16px;font-weight:700;color:var(--amber)">${$(f.revenue||0)}</div>
+            <div style="font-size:9px;color:var(--t3);text-transform:uppercase">Revenue</div>
+          </div>
+        </div>
+        <div class="vm" style="margin-top:6px"><span><b>${N(v.likes)}</b> likes</span><span><b>${N(v.comments)}</b> comments</span><span>${new Date(v.publishedAt).toLocaleDateString()}</span>${f.optinRate>0?`<span style="color:var(--green)"><b>${f.optinRate}%</b> opt-in rate</span>`:''}</div>
+      </div>
+    </div>`}).join('')||'<div class="em">No videos</div>';
+
+  document.querySelector('.mn').innerHTML=`<div class="ph"><h1>YouTube &rarr; Funnel</h1><button class="btn" onclick="go('youtube')">Refresh</button></div>${cs}<div class="tc"><h3>Video Performance</h3>${vs}</div>`;
 }
 
 // ============ EMAILS ============

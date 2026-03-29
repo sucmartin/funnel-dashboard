@@ -105,7 +105,7 @@ router.get('/funnel', async (req: Request, res: Response) => {
   } catch (err) { console.error('[Dashboard] Funnel error:', err); res.status(500).json({ error: 'Failed' }); }
 });
 
-// GET /api/dashboard/youtube
+// GET /api/dashboard/youtube — enriched with funnel data per video
 router.get('/youtube', async (req: Request, res: Response) => {
   if (!checkAuth(req, res)) return;
   if (!config.youtube.apiKey || !config.youtube.channelId) {
@@ -113,8 +113,75 @@ router.get('/youtube', async (req: Request, res: Response) => {
     return;
   }
   try {
-    const [channel, videos] = await Promise.all([getChannelStats(), getRecentVideos(20)]);
-    res.json({ channel, videos });
+    const [channel, videos, campaigns, campaignPV] = await Promise.all([
+      getChannelStats(),
+      getRecentVideos(30),
+      getCampaignBreakdown(),
+      getCampaignPageviews(),
+    ]);
+
+    // Build lookup maps from campaign data
+    const campMap = new Map(campaigns.map(c => [c.campaign, c]));
+    const pvMap = new Map(campaignPV.map(p => [p.campaign, p.views]));
+
+    // Slugify a video title the same way the UTM generator does
+    function slugify(title: string): string {
+      return title.toLowerCase()
+        .replace(/['']/g, '')
+        .replace(/neville goddard['s]?\s*/gi, '')
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/-+/g, '-')
+        .replace(/^-|-$/g, '')
+        .split('-').slice(0, 8).join('-');
+    }
+
+    // Try to match each video to a campaign by fuzzy slug matching
+    const enrichedVideos = videos.map((v: any) => {
+      const slug = slugify(v.title);
+
+      // Try exact match first, then partial matches
+      let matchedCampaign = campMap.get(slug);
+      let matchedSlug = slug;
+
+      if (!matchedCampaign) {
+        // Try matching by checking if any campaign slug is contained in the video slug or vice versa
+        for (const [campSlug, camp] of campMap.entries()) {
+          if (campSlug === 'direct') continue;
+          // Check if significant overlap (at least 3 words match)
+          const campWords = campSlug.split('-');
+          const slugWords = slug.split('-');
+          const overlap = campWords.filter((w: string) => w.length > 2 && slugWords.includes(w)).length;
+          if (overlap >= 3 || campSlug.includes(slug.slice(0, 20)) || slug.includes(campSlug.slice(0, 20))) {
+            matchedCampaign = camp;
+            matchedSlug = campSlug;
+            break;
+          }
+        }
+      }
+
+      const clicks = pvMap.get(matchedSlug) || 0;
+
+      return {
+        ...v,
+        funnel: matchedCampaign ? {
+          campaign: matchedCampaign.campaign,
+          clicks,
+          subscribers: matchedCampaign.subscribers,
+          buyers: matchedCampaign.buyers,
+          revenue: matchedCampaign.revenue,
+          optinRate: clicks > 0 ? +((matchedCampaign.subscribers / clicks) * 100).toFixed(1) : 0,
+        } : {
+          campaign: null,
+          clicks,
+          subscribers: 0,
+          buyers: 0,
+          revenue: 0,
+          optinRate: 0,
+        },
+      };
+    });
+
+    res.json({ channel, videos: enrichedVideos });
   } catch (err) { console.error('[Dashboard] YouTube error:', err); res.status(500).json({ error: 'Failed' }); }
 });
 
