@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { config } from '../config';
 import { getDashboardStats, getCampaignBreakdown, getRecentActivity, getPageviewsByDay } from '../db/queries';
+import { getRecentVideos, getChannelStats } from '../services/youtube';
 
 const router = Router();
 
@@ -61,6 +62,25 @@ router.get('/pageviews', async (req: Request, res: Response) => {
   } catch (err) {
     console.error('[Dashboard] Pageviews error:', err);
     res.status(500).json({ error: 'Failed to load pageviews' });
+  }
+});
+
+// GET /api/dashboard/youtube
+router.get('/youtube', async (req: Request, res: Response) => {
+  if (!checkAuth(req, res)) return;
+  if (!config.youtube.apiKey || !config.youtube.channelId) {
+    res.json({ channel: null, videos: [], error: 'YouTube API not configured' });
+    return;
+  }
+  try {
+    const [channel, videos] = await Promise.all([
+      getChannelStats(),
+      getRecentVideos(20),
+    ]);
+    res.json({ channel, videos });
+  } catch (err) {
+    console.error('[Dashboard] YouTube error:', err);
+    res.status(500).json({ error: 'Failed to load YouTube data' });
   }
 });
 

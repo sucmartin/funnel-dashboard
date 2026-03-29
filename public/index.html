@@ -143,10 +143,36 @@
     .funnel-arrow { color: #334155; font-size: 20px; }
     .funnel-rate { font-size: 11px; color: #fbbf24; text-align: center; }
 
+    /* YouTube */
+    .video-card {
+      display: flex; gap: 16px; background: #1e293b; border-radius: 12px;
+      padding: 16px; border: 1px solid #334155; margin-bottom: 12px;
+    }
+    .video-card img { width: 160px; height: 90px; border-radius: 8px; object-fit: cover; flex-shrink: 0; }
+    .video-info { flex: 1; min-width: 0; }
+    .video-info .video-title {
+      font-size: 14px; font-weight: 600; margin-bottom: 6px;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .video-info .video-title a { color: #e2e8f0; text-decoration: none; }
+    .video-info .video-title a:hover { color: #60a5fa; }
+    .video-stats { display: flex; gap: 16px; flex-wrap: wrap; }
+    .video-stat { font-size: 12px; color: #94a3b8; }
+    .video-stat span { font-weight: 700; color: #e2e8f0; }
+    .yt-channel-stats { display: flex; gap: 24px; margin-bottom: 24px; flex-wrap: wrap; }
+    .yt-channel-stat {
+      background: #1e293b; border-radius: 8px; padding: 12px 20px;
+      border: 1px solid #334155; text-align: center; min-width: 140px;
+    }
+    .yt-channel-stat .yt-label { font-size: 11px; color: #94a3b8; text-transform: uppercase; }
+    .yt-channel-stat .yt-val { font-size: 22px; font-weight: 700; color: #fb7185; margin-top: 2px; }
+
     @media (max-width: 640px) {
       body { padding: 12px; }
       .stat-card .value { font-size: 24px; }
       .funnel { flex-direction: column; }
+      .video-card { flex-direction: column; }
+      .video-card img { width: 100%; height: auto; }
       .funnel-arrow { transform: rotate(90deg); }
     }
   </style>
@@ -197,13 +223,15 @@
       currentTab = tab;
       if (tab === 'dashboard') loadDashboard();
       else if (tab === 'links') showLinkGenerator();
+      else if (tab === 'youtube') loadYouTube();
     }
 
     function renderTabs() {
       return `
         <div class="tabs">
           <div class="tab ${currentTab === 'dashboard' ? 'active' : ''}" onclick="switchTab('dashboard')">Dashboard</div>
-          <div class="tab ${currentTab === 'links' ? 'active' : ''}" onclick="switchTab('links')">UTM Link Generator</div>
+          <div class="tab ${currentTab === 'youtube' ? 'active' : ''}" onclick="switchTab('youtube')">YouTube</div>
+          <div class="tab ${currentTab === 'links' ? 'active' : ''}" onclick="switchTab('links')">UTM Links</div>
         </div>
       `;
     }
@@ -443,6 +471,76 @@
         btn.classList.add('copied');
         setTimeout(() => { btn.textContent = orig; btn.classList.remove('copied'); }, 2000);
       });
+    }
+
+    // ---- YouTube ----
+    async function loadYouTube() {
+      currentTab = 'youtube';
+      document.getElementById('app').innerHTML = renderTabs() + '<div class="loading">Loading YouTube data...</div>';
+
+      try {
+        const data = await apiFetch('/api/dashboard/youtube');
+        renderYouTube(data);
+      } catch (err) {
+        if (err.message !== 'Unauthorized') {
+          document.getElementById('app').innerHTML = renderTabs() + `<div class="error">Failed to load YouTube data: ${err.message}</div>`;
+        }
+      }
+    }
+
+    function fmtNum(n) {
+      if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
+      if (n >= 1000) return (n / 1000).toFixed(1) + 'K';
+      return n.toLocaleString();
+    }
+
+    function renderYouTube(data) {
+      const channel = data.channel;
+      const videos = data.videos || [];
+
+      const channelHtml = channel ? `
+        <div class="yt-channel-stats">
+          <div class="yt-channel-stat">
+            <div class="yt-label">Subscribers</div>
+            <div class="yt-val">${fmtNum(channel.subscriberCount)}</div>
+          </div>
+          <div class="yt-channel-stat">
+            <div class="yt-label">Total Views</div>
+            <div class="yt-val">${fmtNum(channel.viewCount)}</div>
+          </div>
+          <div class="yt-channel-stat">
+            <div class="yt-label">Videos</div>
+            <div class="yt-val">${fmtNum(channel.videoCount)}</div>
+          </div>
+        </div>
+      ` : '';
+
+      const videosHtml = videos.length > 0 ? videos.map(v => {
+        const date = new Date(v.publishedAt).toLocaleDateString();
+        return `
+        <div class="video-card">
+          <img src="${v.thumbnail}" alt="" loading="lazy" />
+          <div class="video-info">
+            <div class="video-title"><a href="https://youtube.com/watch?v=${v.videoId}" target="_blank">${v.title}</a></div>
+            <div class="video-stats">
+              <div class="video-stat">Views: <span>${fmtNum(v.views)}</span></div>
+              <div class="video-stat">Likes: <span>${fmtNum(v.likes)}</span></div>
+              <div class="video-stat">Comments: <span>${fmtNum(v.comments)}</span></div>
+              <div class="video-stat">Published: <span>${date}</span></div>
+            </div>
+          </div>
+        </div>
+      `}).join('') : '<div style="color:#64748b;padding:24px;text-align:center;">No videos found.</div>';
+
+      document.getElementById('app').innerHTML = `
+        ${renderTabs()}
+        <h1>YouTube Analytics <button class="refresh-btn" onclick="loadYouTube()">Refresh</button></h1>
+        ${channelHtml}
+        <div class="section">
+          <h2>Recent Videos</h2>
+          ${videosHtml}
+        </div>
+      `;
     }
 
     // Boot

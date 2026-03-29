@@ -12,5 +12,9 @@ export const config = {
     url: process.env.TURSO_DATABASE_URL || '',
     authToken: process.env.TURSO_AUTH_TOKEN || '',
   },
+  youtube: {
+    apiKey: process.env.YOUTUBE_API_KEY || '',
+    channelId: process.env.YOUTUBE_CHANNEL_ID || '',
+  },
   dashboardSecret: process.env.DASHBOARD_SECRET || '',
 };
