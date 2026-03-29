@@ -41,8 +41,9 @@ function detectPage(){
 var utms=getUtms();
 send("/api/track/pageview",{visitor_id:vid,page:detectPage(),utm_source:utms.utm_source,utm_campaign:utms.utm_campaign,utm_medium:utms.utm_medium,referrer:document.referrer||undefined});
 
+var lastOptinEmail="";
 function track(name,meta){var u2=getUtms();send("/api/track/event",{visitor_id:vid,event_name:name,metadata:Object.assign({},u2,meta)})}
-function trackOptin(email,meta){var u2=getUtms();send("/api/track/event",{visitor_id:vid,event_name:"optin_submit",email:email,metadata:Object.assign({},u2,meta)})}
+function trackOptin(email,meta){if(!email||email===lastOptinEmail)return;lastOptinEmail=email;var u2=getUtms();send("/api/track/event",{visitor_id:vid,event_name:"optin_submit",email:email,metadata:Object.assign({},u2,meta)})}
 
 /* Auto-intercept: any form with an email input gets tracked on submit */
 function autoIntercept(){
