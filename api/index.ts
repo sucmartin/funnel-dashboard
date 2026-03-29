@@ -7,21 +7,8 @@ import dashboardRouter from '../src/routes/dashboard';
 
 const app = express();
 
-// CORS — allow Lovable pages and local dev
-app.use(cors({
-  origin: (origin, callback) => {
-    if (!origin) return callback(null, true);
-    const allowed = config.allowedOrigins.some(pattern => {
-      if (pattern.includes('*')) {
-        const regex = new RegExp('^' + pattern.replace(/\*/g, '.*') + '$');
-        return regex.test(origin);
-      }
-      return origin === pattern;
-    });
-    callback(null, allowed);
-  },
-  credentials: true,
-}));
+// CORS — allow all origins for tracking endpoints (same as Google Analytics)
+app.use(cors());
 
 // Stripe webhook needs raw body — must be before express.json()
 app.use('/api/webhooks', express.raw({ type: 'application/json' }));
