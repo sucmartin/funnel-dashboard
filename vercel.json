@@ -11,7 +11,11 @@
     }
   ],
   "routes": [
-    { "src": "/tracking.js", "dest": "/public/tracking.js" },
+    {
+      "src": "/tracking.js",
+      "dest": "/public/tracking.js",
+      "headers": { "Cache-Control": "public, max-age=60, s-maxage=60" }
+    },
     { "src": "/api/(.*)", "dest": "/api/index.ts" },
     { "src": "/(.*)", "dest": "/public/$1" }
   ]
