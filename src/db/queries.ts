@@ -240,7 +240,7 @@ export async function getRevenueByDay(days = 30, ch = DC) {
 export async function getCampaignPageviews(ch = DC) {
   await ensureSchema();
   const db = getDb();
-  const result = await db.execute({ sql: `SELECT COALESCE(utm_campaign, 'direct') as campaign, COUNT(*) as views FROM pageviews WHERE COALESCE(channel_id, 'default') = ? AND utm_campaign IS NOT NULL AND utm_campaign != '' GROUP BY utm_campaign ORDER BY views DESC`, args: [ch] });
+  const result = await db.execute({ sql: `SELECT COALESCE(NULLIF(utm_campaign, ''), 'direct') as campaign, COUNT(*) as views FROM pageviews WHERE COALESCE(channel_id, 'default') = ? GROUP BY campaign ORDER BY views DESC`, args: [ch] });
   return result.rows.map(row => ({ campaign: row.campaign as string, views: Number(row.views) }));
 }
 
