@@ -93,9 +93,18 @@ const A=window.location.origin;
 let S=localStorage.getItem('ds')||new URLSearchParams(location.search).get('secret')||'';
 if(S)localStorage.setItem('ds',S);
 let T='overview';
+let CH=localStorage.getItem('ft_channel')||'default';
+let channelList=[];
 
-function qs(s){return S?`${s}${s.includes('?')?'&':'?'}secret=${encodeURIComponent(S)}`:s}
+function qs(s){
+  let r=s;
+  if(S)r+=`${r.includes('?')?'&':'?'}secret=${encodeURIComponent(S)}`;
+  if(CH&&CH!=='default')r+=`${r.includes('?')?'&':'?'}channel=${encodeURIComponent(CH)}`;
+  return r;
+}
 async function af(p){const r=await fetch(qs(`${A}${p}`));if(r.status===401){showAuth();throw new Error('auth')}if(!r.ok)throw new Error(r.status);return r.json()}
+async function loadChannels(){try{channelList=await af('/api/dashboard/channels')}catch(e){channelList=[{id:'default',name:'Default Channel'}]}}
+function switchChannel(id){CH=id;localStorage.setItem('ft_channel',id);go(T)}
 function showAuth(){document.getElementById('app').innerHTML=`<div class="af"><h2>FunnelTrack</h2><input type="password" id="si" placeholder="Enter secret" autofocus /><button class="btn btn-p" onclick="doA()">Unlock</button></div>`;document.getElementById('si').addEventListener('keydown',e=>{if(e.key==='Enter')doA()})}
 function doA(){S=document.getElementById('si').value;localStorage.setItem('ds',S);go('overview')}
 
@@ -109,7 +118,13 @@ const I={
   ln:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>',
 };
 
+function chPicker(){
+  if(channelList.length<=1)return'';
+  const opts=channelList.map(c=>`<option value="${c.id}" ${c.id===CH?'selected':''}>${c.name}</option>`).join('');
+  return`<div style="padding:6px 12px 10px"><select onchange="switchChannel(this.value)" style="width:100%;padding:6px 8px;border-radius:6px;border:1px solid var(--bd);background:var(--bg);color:var(--t1);font-size:11px;font-weight:600">${opts}</select></div>`;
+}
 function sh(c){return`<div class="shell"><div class="sb"><div class="logo">Funnel<span>Track</span></div>
+${chPicker()}
 <div class="ni ${T==='overview'?'a':''}" onclick="go('overview')">${I.ov} Overview</div>
 <div class="ni ${T==='youtube'?'a':''}" onclick="go('youtube')">${I.yt} YouTube</div>
 <div class="ni ${T==='vsl'?'a':''}" onclick="go('vsl')">${I.ac} VSL</div>
@@ -610,10 +625,14 @@ function rSt(settings){
     </div>`;
   }).join('');
 
+  let chMgr='';
+  try{chMgr=await loadChannelManager()}catch(e){}
+
   document.querySelector('.mn').innerHTML=`
     <div class="ph"><h1>Settings</h1><button class="btn" onclick="go('settings')">Refresh</button></div>
-    <div style="font-size:12px;color:var(--t3);margin-bottom:16px">Configure API keys and product IDs. Settings saved here override Vercel environment variables. Sensitive values are encrypted at rest in your database.</div>
-    <div class="card" style="padding:0;overflow:hidden">${rows}</div>`;
+    <div style="font-size:12px;color:var(--t3);margin-bottom:16px">Configure API keys and product IDs. Settings saved here override Vercel environment variables.</div>
+    <div class="card" style="padding:0;overflow:hidden">${rows}</div>
+    ${chMgr}`;
 }
 async function saveSetting(key){
   const input=document.getElementById('st_'+key);
@@ -628,7 +647,45 @@ async function saveSetting(key){
   }catch(e){alert('Failed to save: '+e.message)}
 }
 
-go('overview');
+// ============ CHANNELS MANAGEMENT (inside Settings) ============
+async function loadChannelManager(){
+  const chs=await af('/api/dashboard/channels');
+  const rows=chs.map(c=>`<div style="display:flex;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid var(--bd)">
+    <span class="tg tg-b">${c.id}</span>
+    <span style="flex:1;font-weight:600;font-size:13px">${c.name}</span>
+    <span style="font-size:10px;color:var(--t3)">${c.opt_in_url||''}</span>
+    ${c.id!=='default'?`<button class="btn" style="font-size:10px;color:var(--rose)" onclick="delCh('${c.id}')">Delete</button>`:''}
+  </div>`).join('');
+  return`<div class="tc" style="margin-top:24px"><h3>Channels</h3>
+    ${rows}
+    <div style="padding:14px 16px;display:flex;gap:8px">
+      <input id="nch_id" placeholder="channel-slug" style="flex:1;padding:6px 10px;border-radius:6px;border:1px solid var(--bd);background:var(--bg);color:var(--t1);font-size:12px"/>
+      <input id="nch_name" placeholder="Channel Name" style="flex:1;padding:6px 10px;border-radius:6px;border:1px solid var(--bd);background:var(--bg);color:var(--t1);font-size:12px"/>
+      <button class="btn btn-p" onclick="addCh()">Add Channel</button>
+    </div>
+  </div>`;
+}
+async function addCh(){
+  const id=document.getElementById('nch_id').value.trim().toLowerCase().replace(/[^a-z0-9-]/g,'-');
+  const name=document.getElementById('nch_name').value.trim();
+  if(!id||!name){alert('Both ID and name are required');return}
+  await fetch(qs(A+'/api/dashboard/channels'),{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({id,name})});
+  await loadChannels();
+  pSt();
+}
+async function delCh(id){
+  if(!confirm('Delete channel "'+id+'"? Data will remain but won\\'t be accessible.'))return;
+  await fetch(qs(A+'/api/dashboard/channels/'+id),{method:'DELETE'});
+  await loadChannels();
+  if(CH===id){CH='default';localStorage.setItem('ft_channel','default')}
+  pSt();
+}
+
+// Init: load channels then show overview
+(async function(){
+  await loadChannels();
+  go('overview');
+})();
 </script>
 </body>
 </html>

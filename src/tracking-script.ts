@@ -3,7 +3,8 @@
 
 export const TRACKING_SCRIPT = `"use strict";(function(){
 var u=document.currentScript?document.currentScript.getAttribute("data-api"):"";
-if(!u){var scripts=document.querySelectorAll("script[data-api]");for(var idx=0;idx<scripts.length;idx++){var val=scripts[idx].getAttribute("data-api");if(val){u=val;break}}}
+var chId=document.currentScript?document.currentScript.getAttribute("data-channel"):"";
+if(!u){var scripts=document.querySelectorAll("script[data-api]");for(var idx=0;idx<scripts.length;idx++){var val=scripts[idx].getAttribute("data-api");if(val){u=val;if(!chId)chId=scripts[idx].getAttribute("data-channel")||"";break}}}
 if(!u){console.warn("[FunnelTracker] No data-api attribute found. Tracking disabled.");return}
 
 function uuid(){return"xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g,function(n){var t=Math.random()*16|0;return(n==="x"?t:t&3|8).toString(16)})}
@@ -39,11 +40,13 @@ function detectPage(){
 }
 
 var utms=getUtms();
-send("/api/track/pageview",{visitor_id:vid,page:detectPage(),utm_source:utms.utm_source,utm_campaign:utms.utm_campaign,utm_medium:utms.utm_medium,referrer:document.referrer||undefined});
+var pvData={visitor_id:vid,page:detectPage(),utm_source:utms.utm_source,utm_campaign:utms.utm_campaign,utm_medium:utms.utm_medium,referrer:document.referrer||undefined};
+if(chId)pvData.channel_id=chId;
+send("/api/track/pageview",pvData);
 
 var lastOptinEmail="";
-function track(name,meta){var u2=getUtms();send("/api/track/event",{visitor_id:vid,event_name:name,metadata:Object.assign({},u2,meta)})}
-function trackOptin(email,meta){if(!email||email===lastOptinEmail)return;lastOptinEmail=email;var u2=getUtms();send("/api/track/event",{visitor_id:vid,event_name:"optin_submit",email:email,metadata:Object.assign({},u2,meta)})}
+function track(name,meta){var u2=getUtms();var d={visitor_id:vid,event_name:name,metadata:Object.assign({},u2,meta)};if(chId)d.channel_id=chId;send("/api/track/event",d)}
+function trackOptin(email,meta){if(!email||email===lastOptinEmail)return;lastOptinEmail=email;var u2=getUtms();var d={visitor_id:vid,event_name:"optin_submit",email:email,metadata:Object.assign({},u2,meta)};if(chId)d.channel_id=chId;send("/api/track/event",d)}
 
 /* Auto-intercept: any form with an email input gets tracked on submit */
 function autoIntercept(){

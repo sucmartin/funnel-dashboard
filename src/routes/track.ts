@@ -12,6 +12,7 @@ const pageviewSchema = z.object({
   utm_campaign: z.string().optional(),
   utm_medium: z.string().optional(),
   referrer: z.string().optional(),
+  channel_id: z.string().optional(),
 });
 
 const eventSchema = z.object({
@@ -19,6 +20,7 @@ const eventSchema = z.object({
   event_name: z.string().min(1),
   email: z.string().email().optional(),
   metadata: z.record(z.unknown()).optional(),
+  channel_id: z.string().optional(),
 });
 
 // POST /api/track/pageview
@@ -66,7 +68,7 @@ router.post('/event', async (req: Request, res: Response) => {
       const utm_campaign = utms?.utm_campaign || undefined;
       const utm_medium = utms?.utm_medium || undefined;
 
-      await upsertSubscriber({ email, visitor_id, utm_source, utm_campaign, utm_medium });
+      await upsertSubscriber({ email, visitor_id, utm_source, utm_campaign, utm_medium, channel_id: parsed.data.channel_id });
 
       // Fire-and-forget MailerLite call (don't block response)
       addSubscriberToMailerLite({ email, utm_campaign, utm_source }).catch(err => {
