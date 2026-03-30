@@ -47,8 +47,13 @@
     .grade{display:inline-block;width:24px;height:24px;border-radius:6px;text-align:center;line-height:24px;font-size:11px;font-weight:700}
     .grade-A{background:rgba(34,197,94,.15);color:#4ade80}.grade-B{background:rgba(59,130,246,.15);color:#60a5fa}
     .grade-C{background:rgba(245,158,11,.15);color:#fbbf24}.grade-D{background:rgba(100,116,139,.15);color:#94a3b8}
-    .mc{height:100px;display:flex;align-items:flex-end;gap:1px}.mc .b{flex:1;border-radius:2px 2px 0 0;min-width:2px;transition:opacity .15s}
-    .mc .b:hover{opacity:.8}.cf{display:flex;justify-content:space-between;font-size:9px;color:var(--t3);margin-top:3px}
+    .mc{display:flex;align-items:flex-end;gap:1px}.mc .b{flex:1;border-radius:2px 2px 0 0;min-width:2px;transition:opacity .15s;position:relative;display:flex;align-items:flex-start;justify-content:center}
+    .mc .b:hover{opacity:.8}.mc .b .bv{font-size:8px;color:rgba(255,255,255,.85);font-weight:600;margin-top:2px}
+    .cf{display:flex;justify-content:space-between;font-size:9px;color:var(--t3);margin-top:3px}
+    th.sort{cursor:pointer;user-select:none}th.sort:hover{color:var(--t1)}th.sort::after{content:'';margin-left:3px}th.sort.asc::after{content:' \u25B2'}th.sort.desc::after{content:' \u25BC'}
+    .dr{display:flex;gap:4px;margin-bottom:16px}.dr button{padding:5px 12px;font-size:11px;font-weight:600;border:1px solid var(--bd);border-radius:6px;background:var(--card);color:var(--t2);cursor:pointer;transition:all .15s}.dr button.active{background:var(--blue);color:#fff;border-color:var(--blue)}.dr button:hover:not(.active){background:var(--s2)}
+    .today-card{background:linear-gradient(135deg,rgba(59,130,246,.08),rgba(34,197,94,.08));border:1px solid rgba(59,130,246,.2);border-radius:var(--r);padding:14px 18px;margin-bottom:16px;display:flex;gap:20px;align-items:center;flex-wrap:wrap}
+    .today-card .td-item{text-align:center;flex:1;min-width:80px}.today-card .td-val{font-size:22px;font-weight:700}.today-card .td-lb{font-size:9px;color:var(--t3);text-transform:uppercase;letter-spacing:.5px;margin-top:2px}
     .cc{background:var(--s1);border:1px solid var(--bd);border-radius:var(--r);padding:16px;margin-bottom:20px}
     .cc h3{font-size:12px;font-weight:600;color:var(--t2);margin-bottom:10px}
     .vr{display:flex;gap:12px;align-items:center;padding:10px 16px;border-bottom:1px solid var(--bd)}
@@ -119,28 +124,60 @@ function go(t){T=t;const m={overview:pOv,youtube:pYt,emails:pEm,scoring:pSc,cost
 function N(n){if(n>=1e6)return(n/1e6).toFixed(1)+'M';if(n>=1e3)return(n/1e3).toFixed(1)+'K';return n.toLocaleString()}
 function $(n){return'$'+n.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}
 function P(a,b){return b>0?((a/b)*100).toFixed(1)+'%':'0%'}
-function mc(d,k,col,h=100){if(!d.length)return'<div class="mc" style="justify-content:center;color:var(--t3);font-size:11px;height:'+h+'px">No data</div>';const mx=Math.max(...d.map(x=>x[k]),1);return`<div class="mc" style="height:${h}px">${d.map(x=>`<div class="b" style="height:${Math.max(x[k]/mx*100,2)}%;background:${col}" title="${x.day||x.week}: ${x[k]}"></div>`).join('')}</div><div class="cf"><span>${d[0].day||d[0].week||''}</span><span>${d[d.length-1].day||d[d.length-1].week||''}</span></div>`}
+function mc(d,k,col,h=120){if(!d.length)return'<div class="mc" style="justify-content:center;color:var(--t3);font-size:11px;height:'+h+'px">No data yet</div>';const mx=Math.max(...d.map(x=>x[k]),1);const total=d.reduce((a,x)=>a+x[k],0);const yLabels=`<div style="display:flex;flex-direction:column;justify-content:space-between;align-items:flex-end;padding:2px 0;height:${h}px;font-size:9px;color:var(--t3);min-width:30px"><span>${N(mx)}</span><span>${N(Math.round(mx/2))}</span><span>0</span></div>`;return`<div style="display:flex;gap:6px">${yLabels}<div style="flex:1"><div class="mc" style="height:${h}px">${d.map(x=>`<div class="b" style="height:${Math.max(x[k]/mx*100,2)}%;background:${col}" title="${x.day||x.week}: ${x[k]}"><span class="bv">${x[k]>0&&x[k]>=mx*0.3?x[k]:''}</span></div>`).join('')}</div><div class="cf"><span>${d[0].day||d[0].week||''}</span><span>Total: ${N(total)}</span><span>${d[d.length-1].day||d[d.length-1].week||''}</span></div></div></div>`}
 function bar(val,max,col){const w=max>0?Math.max(val/max*100,1):0;return`<div class="bar-h"><div class="bar-track"><div class="bar-fill" style="width:${w}%;background:${col}"></div></div><span>${val.toFixed(1)}%</span></div>`}
 function cp(t,b){navigator.clipboard.writeText(t).then(()=>{const o=b.textContent;b.textContent='Copied!';b.classList.add('ok');setTimeout(()=>{b.textContent=o;b.classList.remove('ok')},1400)})}
 
 // ============ OVERVIEW ============
-async function pOv(){
+let ovDays=30;let ovData=null;let campSort='subscribers';let campDir='desc';
+async function pOv(days){
+  if(days!==undefined)ovDays=days;
   document.getElementById('app').innerHTML=sh('<div class="ld">Loading...</div>');
   try{
-    const[s,ch,f]=await Promise.all([af('/api/dashboard/stats'),af('/api/dashboard/charts'),af('/api/dashboard/funnel')]);
-    rOv(s,ch,f);
+    const dParam=ovDays===0?'':'&days='+ovDays;
+    const[s,ch,f,td]=await Promise.all([
+      af('/api/dashboard/stats'+(ovDays>0?'?days='+ovDays:'')),
+      af('/api/dashboard/charts?days='+(ovDays||30)),
+      af('/api/dashboard/funnel'),
+      af('/api/dashboard/today')
+    ]);
+    ovData={s,ch,f,td};
+    rOv();
   }catch(e){if(e.message!=='auth')document.querySelector('.mn').innerHTML=`<div class="er">${e.message}</div>`}
 }
-function rOv(s,ch,f){
+function sortCamp(col){if(campSort===col)campDir=campDir==='desc'?'asc':'desc';else{campSort=col;campDir='desc';}rOv();}
+function rOv(){
+  if(!ovData)return;
+  const{s,ch,f,td}=ovData;
   const or=P(s.totalSubscribers,s.totalPageviews),br=P(s.totalPurchases,s.totalSubscribers);
-  const fc=f.campaigns||[];
+  const fc=[...(f.campaigns||[])];
+  // Sort campaigns
+  const getVal=(c,k)=>{switch(k){case'campaign':return c.campaign;case'source':return c.source;case'pageviews':return c.pageviews||0;case'subscribers':return c.subscribers;case'buyers':return c.buyers;case'revenue':return c.revenue;case'revenuePerSub':return c.revenuePerSub||0;case'conversionRate':return parseFloat(c.conversionRate)||0;default:return 0}};
+  fc.sort((a,b)=>{const av=getVal(a,campSort),bv=getVal(b,campSort);const cmp=typeof av==='string'?av.localeCompare(bv):av-bv;return campDir==='desc'?-cmp:cmp;});
+  const srt=(col)=>`class="sort${campSort===col?(' '+(campDir)):''}" onclick="sortCamp('${col}')"`;
   const cr=fc.length>0?fc.map(c=>{
     const roi=c.roi!==null&&c.roi!==undefined?`<span class="tg ${c.roi>=0?'tg-g':'tg-r'}">${c.roi>=0?'+':''}${c.roi}%</span>`:'<span style="color:var(--t3)">-</span>';
     return`<tr><td><span class="grade grade-${c.grade}">${c.grade}</span></td><td><span class="tg tg-p">${c.campaign}</span></td><td><span class="tg tg-b">${c.source}</span></td><td>${N(c.pageviews||0)}</td><td>${c.subscribers}</td><td>${c.buyers}</td><td>${$(c.revenue)}</td><td>${$(c.revenuePerSub||0)}</td><td>${roi}</td><td>${c.conversionRate}</td></tr>`
   }).join(''):'<tr><td colspan="10" class="em">No campaign data yet</td></tr>';
 
+  const drBtn=(d,lbl)=>`<button class="${ovDays===d?'active':''}" onclick="pOv(${d})">${lbl}</button>`;
+  const dateRange=`<div class="dr">${drBtn(1,'Today')}${drBtn(7,'7 days')}${drBtn(14,'14 days')}${drBtn(30,'30 days')}${drBtn(90,'90 days')}${drBtn(0,'All time')}</div>`;
+  const chartLabel=ovDays===0?'All time':ovDays+'d';
+
+  // Today card
+  const todayCard=`<div class="today-card">
+    <div style="font-size:11px;font-weight:700;color:var(--t2);text-transform:uppercase;letter-spacing:1px;writing-mode:vertical-lr;transform:rotate(180deg)">Today</div>
+    <div class="td-item"><div class="td-val" style="color:var(--blue)">${td.pageviews}</div><div class="td-lb">Pageviews</div></div>
+    <div class="td-item"><div class="td-val" style="color:var(--green)">${td.subscribers}</div><div class="td-lb">New Leads</div></div>
+    <div class="td-item"><div class="td-val" style="color:var(--purple)">${td.purchases}</div><div class="td-lb">Sales</div></div>
+    <div class="td-item"><div class="td-val" style="color:var(--amber)">${$(td.revenue)}</div><div class="td-lb">Revenue</div></div>
+    <div class="td-item"><div class="td-val" style="color:var(--cyan)">${td.subscribers>0&&td.pageviews>0?((td.subscribers/td.pageviews)*100).toFixed(1)+'%':'0%'}</div><div class="td-lb">Conv. Rate</div></div>
+  </div>`;
+
   document.querySelector('.mn').innerHTML=`
-    <div class="ph"><h1>Overview</h1><div><button class="btn" onclick="go('overview')">Refresh</button></div></div>
+    <div class="ph"><h1>Overview</h1><div><button class="btn" onclick="pOv()">Refresh</button></div></div>
+    ${todayCard}
+    ${dateRange}
     <div class="card fb" style="padding:14px 18px">
       <div class="step"><div class="v" style="color:var(--blue)">${N(s.totalPageviews)}</div><div class="l">Views</div></div>
       <div class="arr">&rarr;<br><span class="rt">${or}</span></div>
@@ -157,11 +194,15 @@ function rOv(s,ch,f){
       <div class="card st"><div class="lb">Total Events</div><div class="vl" style="color:var(--cyan)">${N(s.totalEvents)}</div><div class="sb2">tracked actions</div></div>
     </div>
     <div class="grid g2">
-      <div class="cc"><h3>Pageviews (30d)</h3>${mc(ch.pageviews,'views','var(--blue)')}</div>
-      <div class="cc"><h3>New Subscribers (30d)</h3>${mc(ch.subscribers,'count','var(--green)')}</div>
+      <div class="cc"><h3>Pageviews (${chartLabel})</h3>${mc(ch.pageviews,'views','var(--blue)')}</div>
+      <div class="cc"><h3>New Subscribers (${chartLabel})</h3>${mc(ch.subscribers,'count','var(--green)')}</div>
+    </div>
+    <div class="grid g2">
+      <div class="cc"><h3>Revenue (${chartLabel})</h3>${mc(ch.revenue,'revenue','var(--amber)')}</div>
+      <div class="cc"><h3>Sales (${chartLabel})</h3>${mc(ch.revenue,'count','var(--purple)')}</div>
     </div>
     <div class="tc"><h3>Campaign Performance</h3>
-      <table><thead><tr><th></th><th>Campaign</th><th>Source</th><th>Views</th><th>Subs</th><th>Sales</th><th>Revenue</th><th>Rev/Sub</th><th>ROI</th><th>Conv.</th></tr></thead>
+      <table><thead><tr><th></th><th ${srt('campaign')}>Campaign</th><th ${srt('source')}>Source</th><th ${srt('pageviews')}>Views</th><th ${srt('subscribers')}>Subs</th><th ${srt('buyers')}>Sales</th><th ${srt('revenue')}>Revenue</th><th ${srt('revenuePerSub')}>Rev/Sub</th><th>ROI</th><th ${srt('conversionRate')}>Conv.</th></tr></thead>
       <tbody>${cr}</tbody></table>
     </div>`;
 }

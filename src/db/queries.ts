@@ -107,15 +107,22 @@ export async function getSubscriberByEmail(email: string) {
 
 // ---- Dashboard queries ----
 
-export async function getDashboardStats() {
+export async function getDashboardStats(days?: number) {
   await ensureSchema();
   const db = getDb();
 
+  const where = days
+    ? { pv: `WHERE created_at >= datetime('now', '-${days} days')`,
+        sub: `WHERE subscribed_at >= datetime('now', '-${days} days')`,
+        pur: `WHERE purchased_at >= datetime('now', '-${days} days')`,
+        ev: `WHERE created_at >= datetime('now', '-${days} days')` }
+    : { pv: '', sub: '', pur: '', ev: '' };
+
   const [pageviews, subscribers, purchases, events] = await Promise.all([
-    db.execute('SELECT COUNT(*) as count FROM pageviews'),
-    db.execute('SELECT COUNT(*) as count FROM subscribers'),
-    db.execute('SELECT COUNT(*) as count, COALESCE(SUM(amount_cents), 0) as revenue FROM purchases'),
-    db.execute('SELECT COUNT(*) as count FROM events'),
+    db.execute(`SELECT COUNT(*) as count FROM pageviews ${where.pv}`),
+    db.execute(`SELECT COUNT(*) as count FROM subscribers ${where.sub}`),
+    db.execute(`SELECT COUNT(*) as count, COALESCE(SUM(amount_cents), 0) as revenue FROM purchases ${where.pur}`),
+    db.execute(`SELECT COUNT(*) as count FROM events ${where.ev}`),
   ]);
 
   return {

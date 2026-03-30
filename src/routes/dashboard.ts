@@ -24,8 +24,18 @@ function checkAuth(req: Request, res: Response): boolean {
 // GET /api/dashboard/stats
 router.get('/stats', async (req: Request, res: Response) => {
   if (!checkAuth(req, res)) return;
-  try { res.json(await getDashboardStats()); }
+  try {
+    const days = req.query.days ? parseInt(req.query.days as string) : undefined;
+    res.json(await getDashboardStats(days));
+  }
   catch (err) { console.error('[Dashboard] Stats error:', err); res.status(500).json({ error: 'Failed' }); }
+});
+
+// GET /api/dashboard/today
+router.get('/today', async (req: Request, res: Response) => {
+  if (!checkAuth(req, res)) return;
+  try { res.json(await getDailySummary()); }
+  catch (err) { console.error('[Dashboard] Today error:', err); res.status(500).json({ error: 'Failed' }); }
 });
 
 // GET /api/dashboard/campaigns
