@@ -49,35 +49,58 @@ export async function getChannelStats(): Promise<ChannelStats> {
 }
 
 export async function getRecentVideos(maxResults = 20): Promise<VideoStats[]> {
-  // Step 1: Get recent video IDs from the channel
-  const searchData = await ytFetch('search', {
-    part: 'snippet',
-    channelId: config.youtube.channelId,
-    order: 'date',
-    type: 'video',
-    maxResults: String(maxResults),
-  });
+  return getAllVideos(maxResults);
+}
 
-  const videoIds = searchData.items
-    ?.map((item: any) => item.id?.videoId)
-    .filter(Boolean)
-    .join(',');
+export async function getAllVideos(limit = 500): Promise<VideoStats[]> {
+  const allVideoIds: string[] = [];
+  let pageToken = '';
 
-  if (!videoIds) return [];
+  // Step 1: Paginate through search results to get ALL video IDs
+  while (allVideoIds.length < limit) {
+    const params: Record<string, string> = {
+      part: 'snippet',
+      channelId: config.youtube.channelId,
+      order: 'date',
+      type: 'video',
+      maxResults: '50',
+    };
+    if (pageToken) params.pageToken = pageToken;
 
-  // Step 2: Get detailed stats for each video
-  const statsData = await ytFetch('videos', {
-    part: 'statistics,snippet',
-    id: videoIds,
-  });
+    const searchData = await ytFetch('search', params);
+    const ids = (searchData.items || [])
+      .map((item: any) => item.id?.videoId)
+      .filter(Boolean);
 
-  return (statsData.items || []).map((item: any) => ({
-    videoId: item.id,
-    title: item.snippet?.title || 'Unknown',
-    publishedAt: item.snippet?.publishedAt || '',
-    views: parseInt(item.statistics?.viewCount || '0'),
-    likes: parseInt(item.statistics?.likeCount || '0'),
-    comments: parseInt(item.statistics?.commentCount || '0'),
-    thumbnail: item.snippet?.thumbnails?.medium?.url || '',
-  }));
+    allVideoIds.push(...ids);
+
+    if (!searchData.nextPageToken || ids.length === 0) break;
+    pageToken = searchData.nextPageToken;
+  }
+
+  if (allVideoIds.length === 0) return [];
+
+  // Step 2: Get detailed stats in batches of 50 (API limit)
+  const allVideos: VideoStats[] = [];
+  for (let i = 0; i < allVideoIds.length; i += 50) {
+    const batch = allVideoIds.slice(i, i + 50).join(',');
+    const statsData = await ytFetch('videos', {
+      part: 'statistics,snippet',
+      id: batch,
+    });
+
+    const videos = (statsData.items || []).map((item: any) => ({
+      videoId: item.id,
+      title: item.snippet?.title || 'Unknown',
+      publishedAt: item.snippet?.publishedAt || '',
+      views: parseInt(item.statistics?.viewCount || '0'),
+      likes: parseInt(item.statistics?.likeCount || '0'),
+      comments: parseInt(item.statistics?.commentCount || '0'),
+      thumbnail: item.snippet?.thumbnails?.medium?.url || '',
+    }));
+
+    allVideos.push(...videos);
+  }
+
+  return allVideos;
 }

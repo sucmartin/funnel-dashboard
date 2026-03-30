@@ -171,22 +171,62 @@ async function pYt(){
   document.getElementById('app').innerHTML=sh('<div class="ld">Loading YouTube...</div>');
   try{const d=await af('/api/dashboard/youtube');rYt(d)}catch(e){if(e.message!=='auth')document.querySelector('.mn').innerHTML=`<div class="er">${e.message}</div>`}
 }
+let ytData=null;let ytSort='views';let ytFilter='all';let ytSearch='';
 function rYt(d){
+  ytData=d;
+  renderYtPage();
+}
+function renderYtPage(){
+  if(!ytData)return;
+  const d=ytData;
   const c=d.channel;
+  const totalOptins=(d.videos||[]).reduce((a,v)=>a+(v.funnel?.subscribers||0),0);
+  const totalRev=(d.videos||[]).reduce((a,v)=>a+(v.funnel?.revenue||0),0);
+  const trackedCount=(d.videos||[]).filter(v=>v.funnel?.campaign).length;
   const cs=c?`<div class="grid g5">
     <div class="card st"><div class="lb">YT Subscribers</div><div class="vl" style="color:var(--rose)">${N(c.subscriberCount)}</div></div>
     <div class="card st"><div class="lb">Total Views</div><div class="vl" style="color:var(--blue)">${N(c.viewCount)}</div></div>
-    <div class="card st"><div class="lb">Videos</div><div class="vl" style="color:var(--purple)">${N(c.videoCount)}</div></div>
-    <div class="card st"><div class="lb">Funnel Opt-ins</div><div class="vl" style="color:var(--green)">${(d.videos||[]).reduce((a,v)=>a+(v.funnel?.subscribers||0),0)}</div></div>
-    <div class="card st"><div class="lb">Funnel Revenue</div><div class="vl" style="color:var(--amber)">${$((d.videos||[]).reduce((a,v)=>a+(v.funnel?.revenue||0),0))}</div></div>
+    <div class="card st"><div class="lb">Videos</div><div class="vl" style="color:var(--purple)">${(d.videos||[]).length} <span style="font-size:11px;color:var(--t3)">/ ${trackedCount} tracked</span></div></div>
+    <div class="card st"><div class="lb">Funnel Opt-ins</div><div class="vl" style="color:var(--green)">${totalOptins}</div></div>
+    <div class="card st"><div class="lb">Funnel Revenue</div><div class="vl" style="color:var(--amber)">${$(totalRev)}</div></div>
   </div>`:'';
 
-  const vs=(d.videos||[]).map(v=>{
+  // Filter videos
+  let vids=[...(d.videos||[])];
+  if(ytSearch){const q=ytSearch.toLowerCase();vids=vids.filter(v=>v.title.toLowerCase().includes(q))}
+  if(ytFilter==='tracked')vids=vids.filter(v=>v.funnel?.campaign);
+  if(ytFilter==='untracked')vids=vids.filter(v=>!v.funnel?.campaign);
+  if(ytFilter==='with-optins')vids=vids.filter(v=>(v.funnel?.subscribers||0)>0);
+
+  // Sort videos
+  if(ytSort==='views')vids.sort((a,b)=>b.views-a.views);
+  if(ytSort==='clicks')vids.sort((a,b)=>(b.funnel?.clicks||0)-(a.funnel?.clicks||0));
+  if(ytSort==='optins')vids.sort((a,b)=>(b.funnel?.subscribers||0)-(a.funnel?.subscribers||0));
+  if(ytSort==='revenue')vids.sort((a,b)=>(b.funnel?.revenue||0)-(a.funnel?.revenue||0));
+  if(ytSort==='date')vids.sort((a,b)=>new Date(b.publishedAt).getTime()-new Date(a.publishedAt).getTime());
+
+  const controls=`<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;align-items:center">
+    <input type="text" placeholder="Search videos..." value="${ytSearch}" oninput="ytSearch=this.value;renderYtPage()" style="flex:1;min-width:200px;padding:8px 12px;background:var(--card);border:1px solid var(--bd);border-radius:6px;color:var(--t1);font-size:13px"/>
+    <select onchange="ytSort=this.value;renderYtPage()" style="padding:8px 12px;background:var(--card);border:1px solid var(--bd);border-radius:6px;color:var(--t1);font-size:13px">
+      <option value="views"${ytSort==='views'?' selected':''}>Sort: Views</option>
+      <option value="clicks"${ytSort==='clicks'?' selected':''}>Sort: Clicks</option>
+      <option value="optins"${ytSort==='optins'?' selected':''}>Sort: Opt-ins</option>
+      <option value="revenue"${ytSort==='revenue'?' selected':''}>Sort: Revenue</option>
+      <option value="date"${ytSort==='date'?' selected':''}>Sort: Newest</option>
+    </select>
+    <select onchange="ytFilter=this.value;renderYtPage()" style="padding:8px 12px;background:var(--card);border:1px solid var(--bd);border-radius:6px;color:var(--t1);font-size:13px">
+      <option value="all"${ytFilter==='all'?' selected':''}>All (${(d.videos||[]).length})</option>
+      <option value="tracked"${ytFilter==='tracked'?' selected':''}>Tracked (${trackedCount})</option>
+      <option value="untracked"${ytFilter==='untracked'?' selected':''}>No UTM (${(d.videos||[]).length-trackedCount})</option>
+      <option value="with-optins"${ytFilter==='with-optins'?' selected':''}>With Opt-ins</option>
+    </select>
+  </div>`;
+
+  const vs=vids.map(v=>{
     const f=v.funnel||{};
-    const hasData=f.clicks>0||f.subscribers>0;
     const linked=f.campaign?`<span class="tg tg-g" style="font-size:9px">Tracked</span>`:`<span class="tg" style="background:rgba(100,116,139,.1);color:var(--t3);font-size:9px">No UTM</span>`;
     return`<div class="vr" style="gap:14px;padding:14px 16px">
-      <img src="${v.thumbnail}" loading="lazy" style="width:140px;height:79px"/>
+      <img src="${v.thumbnail}" loading="lazy" style="width:140px;height:79px;border-radius:6px"/>
       <div class="vi" style="flex:1">
         <div style="display:flex;align-items:center;gap:8px">
           <div class="vt" style="flex:1"><a href="https://youtube.com/watch?v=${v.videoId}" target="_blank">${v.title}</a></div>
@@ -197,7 +237,7 @@ function rYt(d){
             <div style="font-size:16px;font-weight:700;color:var(--blue)">${N(v.views)}</div>
             <div style="font-size:9px;color:var(--t3);text-transform:uppercase">Views</div>
           </div>
-          <div style="flex:1;text-align:center;padding:6px 0;background:var(--bg);border-left:none;border:1px solid var(--bd);border-left:0">
+          <div style="flex:1;text-align:center;padding:6px 0;background:var(--bg);border:1px solid var(--bd);border-left:0">
             <div style="font-size:16px;font-weight:700;color:var(--cyan)">${N(f.clicks||0)}</div>
             <div style="font-size:9px;color:var(--t3);text-transform:uppercase">Clicks</div>
           </div>
@@ -216,9 +256,9 @@ function rYt(d){
         </div>
         <div class="vm" style="margin-top:6px"><span><b>${N(v.likes)}</b> likes</span><span><b>${N(v.comments)}</b> comments</span><span>${new Date(v.publishedAt).toLocaleDateString()}</span>${f.optinRate>0?`<span style="color:var(--green)"><b>${f.optinRate}%</b> opt-in rate</span>`:''}</div>
       </div>
-    </div>`}).join('')||'<div class="em">No videos</div>';
+    </div>`}).join('')||'<div class="em">No videos match your filter</div>';
 
-  document.querySelector('.mn').innerHTML=`<div class="ph"><h1>YouTube &rarr; Funnel</h1><button class="btn" onclick="go('youtube')">Refresh</button></div>${cs}<div class="tc"><h3>Video Performance</h3>${vs}</div>`;
+  document.querySelector('.mn').innerHTML=`<div class="ph"><h1>YouTube &rarr; Funnel</h1><button class="btn" onclick="go('youtube')">Refresh</button></div>${cs}${controls}<div class="tc"><h3>Video Performance <span style="font-size:12px;color:var(--t3)">(${vids.length} videos)</span></h3>${vs}</div>`;
 }
 
 // ============ EMAILS ============

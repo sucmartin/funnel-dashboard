@@ -6,7 +6,7 @@ import {
   addCampaignCost, getCampaignCosts, getCostEntries,
   getSubscriberScoring, getWeeklyStats, getDailySummary,
 } from '../db/queries';
-import { getRecentVideos, getChannelStats } from '../services/youtube';
+import { getRecentVideos, getChannelStats, getAllVideos } from '../services/youtube';
 import { getEmailCampaigns, getGroupStats } from '../services/mailerlite-stats';
 
 const router = Router();
@@ -115,7 +115,7 @@ router.get('/youtube', async (req: Request, res: Response) => {
   try {
     const [channel, videos, campaigns, campaignPV] = await Promise.all([
       getChannelStats(),
-      getRecentVideos(30),
+      getAllVideos(500),
       getCampaignBreakdown(),
       getCampaignPageviews(),
     ]);
