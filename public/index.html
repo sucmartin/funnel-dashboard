@@ -590,7 +590,7 @@ async function pSt(){
   document.getElementById('app').innerHTML=sh('<div class="ld">Loading settings...</div>');
   try{const d=await af('/api/dashboard/settings');rSt(d)}catch(e){if(e.message!=='auth')document.querySelector('.mn').innerHTML=`<div class="er">${e.message}</div>`}
 }
-function rSt(settings){
+async function rSt(settings){
   const labels={
     'MAILERLITE_API_KEY':'MailerLite API Key',
     'MAILERLITE_GROUP_ID':'MailerLite Group ID',
