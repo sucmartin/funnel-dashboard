@@ -73,6 +73,18 @@ CREATE TABLE IF NOT EXISTS campaign_costs (
 );
 
 CREATE INDEX IF NOT EXISTS idx_campaign_costs_campaign ON campaign_costs(utm_campaign);
+
+CREATE TABLE IF NOT EXISTS refunds (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    email TEXT NOT NULL,
+    amount_cents INTEGER NOT NULL,
+    currency TEXT NOT NULL DEFAULT 'usd',
+    stripe_charge_id TEXT UNIQUE NOT NULL,
+    refunded_at TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_refunds_email ON refunds(email);
 `;
 
 export async function ensureSchema(): Promise<void> {

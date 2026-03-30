@@ -395,16 +395,169 @@ export async function getDailySummary() {
   await ensureSchema();
   const db = getDb();
   const today = new Date().toISOString().split('T')[0];
-  const [pv, subs, purchases] = await Promise.all([
+  const [pv, subs, purchases, uniqueVis] = await Promise.all([
     db.execute({ sql: `SELECT COUNT(*) as c FROM pageviews WHERE DATE(created_at) = ?`, args: [today] }),
     db.execute({ sql: `SELECT COUNT(*) as c FROM subscribers WHERE DATE(subscribed_at) = ?`, args: [today] }),
     db.execute({ sql: `SELECT COUNT(*) as c, COALESCE(SUM(amount_cents),0) as rev FROM purchases WHERE DATE(purchased_at) = ?`, args: [today] }),
+    db.execute({ sql: `SELECT COUNT(DISTINCT visitor_id) as c FROM pageviews WHERE DATE(created_at) = ?`, args: [today] }),
   ]);
   return {
     date: today,
     pageviews: Number(pv.rows[0].c),
+    uniqueVisitors: Number(uniqueVis.rows[0].c),
     subscribers: Number(subs.rows[0].c),
     purchases: Number(purchases.rows[0].c),
     revenue: Number(purchases.rows[0].rev) / 100,
+  };
+}
+
+// ---- Refund tracking ----
+
+export async function insertRefund(data: {
+  email: string;
+  amount_cents: number;
+  currency: string;
+  stripe_charge_id: string;
+  refunded_at: string;
+}) {
+  await ensureSchema();
+  const db = getDb();
+  await db.execute({
+    sql: `INSERT OR IGNORE INTO refunds (email, amount_cents, currency, stripe_charge_id, refunded_at)
+          VALUES (?, ?, ?, ?, ?)`,
+    args: [data.email, data.amount_cents, data.currency, data.stripe_charge_id, data.refunded_at],
+  });
+}
+
+export async function getRefundStats() {
+  await ensureSchema();
+  const db = getDb();
+  const [total, sevenDay, thirtyDay] = await Promise.all([
+    db.execute(`SELECT COUNT(*) as c, COALESCE(SUM(amount_cents),0) as amt FROM refunds`),
+    db.execute(`SELECT COUNT(*) as refunds FROM refunds WHERE refunded_at >= datetime('now', '-7 days')`),
+    db.execute(`SELECT COUNT(*) as refunds FROM refunds WHERE refunded_at >= datetime('now', '-30 days')`),
+  ]);
+  const [purchases7d, purchases30d] = await Promise.all([
+    db.execute(`SELECT COUNT(*) as c FROM purchases WHERE purchased_at >= datetime('now', '-7 days')`),
+    db.execute(`SELECT COUNT(*) as c FROM purchases WHERE purchased_at >= datetime('now', '-30 days')`),
+  ]);
+  const ref7 = Number(sevenDay.rows[0].refunds), pur7 = Number(purchases7d.rows[0].c);
+  const ref30 = Number(thirtyDay.rows[0].refunds), pur30 = Number(purchases30d.rows[0].c);
+  return {
+    totalRefunds: Number(total.rows[0].c),
+    totalRefundedAmount: Number(total.rows[0].amt) / 100,
+    refundRate7d: pur7 > 0 ? +((ref7 / pur7) * 100).toFixed(1) : 0,
+    refundRate30d: pur30 > 0 ? +((ref30 / pur30) * 100).toFixed(1) : 0,
+  };
+}
+
+// ---- VSL stats ----
+
+export async function getVSLStats(days?: number) {
+  await ensureSchema();
+  const db = getDb();
+  const dateFilter = days ? `AND created_at >= datetime('now', '-${days} days')` : '';
+  const pvDateFilter = days ? `AND created_at >= datetime('now', '-${days} days')` : '';
+
+  const [visits, uniqueVisits, milestones, ctaClicks] = await Promise.all([
+    db.execute(`SELECT COUNT(*) as c FROM pageviews WHERE (page = 'vsl' OR page = 'offer') ${pvDateFilter}`),
+    db.execute(`SELECT COUNT(DISTINCT visitor_id) as c FROM pageviews WHERE (page = 'vsl' OR page = 'offer') ${pvDateFilter}`),
+    db.execute(`
+      SELECT event_name, COUNT(DISTINCT visitor_id) as unique_count, COUNT(*) as total_count
+      FROM events
+      WHERE event_name IN ('vsl_watch_25','vsl_watch_50','vsl_watch_75','vsl_complete')
+      ${dateFilter}
+      GROUP BY event_name
+    `),
+    db.execute(`SELECT COUNT(DISTINCT visitor_id) as unique_count, COUNT(*) as total FROM events WHERE event_name = 'cta_click' ${dateFilter}`),
+  ]);
+
+  const milestoneMap: Record<string, number> = {};
+  for (const row of milestones.rows) {
+    milestoneMap[row.event_name as string] = Number(row.unique_count);
+  }
+
+  const totalVisits = Number(visits.rows[0].c);
+  const unique = Number(uniqueVisits.rows[0].c);
+  const cta = Number(ctaClicks.rows[0].unique_count);
+
+  return {
+    totalVisits,
+    uniqueVisitors: unique,
+    watch25: milestoneMap['vsl_watch_25'] || 0,
+    watch50: milestoneMap['vsl_watch_50'] || 0,
+    watch75: milestoneMap['vsl_watch_75'] || 0,
+    watchComplete: milestoneMap['vsl_complete'] || 0,
+    ctaClicks: cta,
+    ctaRate: unique > 0 ? +((cta / unique) * 100).toFixed(1) : 0,
+  };
+}
+
+// ---- Checkout stats ----
+
+export async function getCheckoutStats(days?: number) {
+  await ensureSchema();
+  const db = getDb();
+  const dateFilter = days ? `AND created_at >= datetime('now', '-${days} days')` : '';
+  const purDateFilter = days ? `WHERE purchased_at >= datetime('now', '-${days} days')` : '';
+
+  const [checkoutStarts, purchases, refunds] = await Promise.all([
+    db.execute(`SELECT COUNT(DISTINCT visitor_id) as c FROM events WHERE event_name = 'checkout_start' ${dateFilter}`),
+    db.execute(`SELECT COUNT(*) as c, COALESCE(SUM(amount_cents),0) as rev FROM purchases ${purDateFilter}`),
+    getRefundStats(),
+  ]);
+
+  const starts = Number(checkoutStarts.rows[0].c);
+  const completed = Number(purchases.rows[0].c);
+
+  return {
+    checkoutStarts: starts,
+    completedPurchases: completed,
+    abandonmentRate: starts > 0 ? +((1 - completed / starts) * 100).toFixed(1) : 0,
+    revenue: Number(purchases.rows[0].rev) / 100,
+    ...refunds,
+  };
+}
+
+// ---- Full funnel flow ----
+
+export async function getFunnelFlow(days?: number) {
+  await ensureSchema();
+  const db = getDb();
+  const pvFilter = days ? `WHERE created_at >= datetime('now', '-${days} days')` : '';
+  const subFilter = days ? `WHERE subscribed_at >= datetime('now', '-${days} days')` : '';
+  const purFilter = days ? `WHERE purchased_at >= datetime('now', '-${days} days')` : '';
+  const evFilter = days ? `AND created_at >= datetime('now', '-${days} days')` : '';
+
+  const [pageVisits, uniquePageVisits, subs, vslVisits, ctaClicks, purchases] = await Promise.all([
+    db.execute(`SELECT COUNT(*) as c FROM pageviews ${pvFilter}`),
+    db.execute(`SELECT COUNT(DISTINCT visitor_id) as c FROM pageviews ${pvFilter}`),
+    db.execute(`SELECT COUNT(*) as c FROM subscribers ${subFilter}`),
+    db.execute(`SELECT COUNT(DISTINCT visitor_id) as c FROM pageviews WHERE (page = 'vsl' OR page = 'offer') ${pvFilter ? pvFilter.replace('WHERE', 'AND') : ''}`),
+    db.execute(`SELECT COUNT(DISTINCT visitor_id) as c FROM events WHERE event_name = 'cta_click' ${evFilter}`),
+    db.execute(`SELECT COUNT(*) as c FROM purchases ${purFilter}`),
+  ]);
+
+  const pv = Number(pageVisits.rows[0].c);
+  const upv = Number(uniquePageVisits.rows[0].c);
+  const sub = Number(subs.rows[0].c);
+  const vsl = Number(vslVisits.rows[0].c);
+  const cta = Number(ctaClicks.rows[0].c);
+  const pur = Number(purchases.rows[0].c);
+
+  return {
+    pageVisits: pv,
+    uniqueVisitors: upv,
+    subscribers: sub,
+    vslVisitors: vsl,
+    ctaClicks: cta,
+    purchases: pur,
+    rates: {
+      visitToSub: pv > 0 ? +((sub / pv) * 100).toFixed(1) : 0,
+      subToVsl: sub > 0 ? +((vsl / sub) * 100).toFixed(1) : 0,
+      vslToCta: vsl > 0 ? +((cta / vsl) * 100).toFixed(1) : 0,
+      ctaToPurchase: cta > 0 ? +((pur / cta) * 100).toFixed(1) : 0,
+      overallConversion: pv > 0 ? +((pur / pv) * 100).toFixed(2) : 0,
+    },
   };
 }

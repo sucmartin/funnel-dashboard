@@ -112,6 +112,7 @@ const I={
 function sh(c){return`<div class="shell"><div class="sb"><div class="logo">Funnel<span>Track</span></div>
 <div class="ni ${T==='overview'?'a':''}" onclick="go('overview')">${I.ov} Overview</div>
 <div class="ni ${T==='youtube'?'a':''}" onclick="go('youtube')">${I.yt} YouTube</div>
+<div class="ni ${T==='vsl'?'a':''}" onclick="go('vsl')">${I.ac} VSL</div>
 <div class="ni ${T==='emails'?'a':''}" onclick="go('emails')">${I.em} Emails</div>
 <div class="ni ${T==='scoring'?'a':''}" onclick="go('scoring')">${I.sc} Quality Score</div>
 <div class="ni ${T==='costs'?'a':''}" onclick="go('costs')">${I.co} Costs & ROI</div>
@@ -120,7 +121,7 @@ function sh(c){return`<div class="shell"><div class="sb"><div class="logo">Funne
 <div class="ni ${T==='links'?'a':''}" onclick="go('links')">${I.ln} UTM Links</div>
 </div><div class="mn">${c}</div></div>`}
 
-function go(t){T=t;const m={overview:pOv,youtube:pYt,emails:pEm,scoring:pSc,costs:pCo,activity:pAc,links:pLn};(m[t]||pOv)()}
+function go(t){T=t;const m={overview:pOv,youtube:pYt,vsl:pVsl,emails:pEm,scoring:pSc,costs:pCo,activity:pAc,links:pLn};(m[t]||pOv)()}
 function N(n){if(n>=1e6)return(n/1e6).toFixed(1)+'M';if(n>=1e3)return(n/1e3).toFixed(1)+'K';return n.toLocaleString()}
 function $(n){return'$'+n.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}
 function P(a,b){return b>0?((a/b)*100).toFixed(1)+'%':'0%'}
@@ -134,20 +135,21 @@ async function pOv(days){
   if(days!==undefined)ovDays=days;
   document.getElementById('app').innerHTML=sh('<div class="ld">Loading...</div>');
   try{
-    const[s,ch,f,td]=await Promise.all([
+    const[s,ch,f,td,ff]=await Promise.all([
       af('/api/dashboard/stats'+(ovDays>0?'?days='+ovDays:'')),
       af('/api/dashboard/charts?days='+(ovDays||30)),
       af('/api/dashboard/funnel'),
-      af('/api/dashboard/today')
+      af('/api/dashboard/today'),
+      af('/api/dashboard/funnel-flow?days='+(ovDays||30)),
     ]);
-    ovData={s,ch,f,td};
+    ovData={s,ch,f,td,ff};
     rOv();
   }catch(e){if(e.message!=='auth')document.querySelector('.mn').innerHTML=`<div class="er">${e.message}</div>`}
 }
 function sortCamp(col){if(campSort===col)campDir=campDir==='desc'?'asc':'desc';else{campSort=col;campDir='desc';}rOv();}
 function rOv(){
   if(!ovData)return;
-  const{s,ch,f,td}=ovData;
+  const{s,ch,f,td,ff}=ovData;
   const or=P(s.totalSubscribers,s.totalPageviews),br=P(s.totalPurchases,s.totalSubscribers);
   const fc=[...(f.campaigns||[])];
   const getVal=(c,k)=>{switch(k){case'campaign':return c.campaign;case'source':return c.source;case'pageviews':return c.pageviews||0;case'subscribers':return c.subscribers;case'buyers':return c.buyers;case'revenue':return c.revenue;case'revenuePerSub':return c.revenuePerSub||0;case'conversionRate':return parseFloat(c.conversionRate)||0;default:return 0}};
@@ -191,6 +193,48 @@ function rOv(){
       <div style="background:var(--s1);padding:20px;text-align:center">
         <div style="font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Rev / Lead</div>
         <div style="font-size:30px;font-weight:800;color:var(--cyan);line-height:1">${$(s.totalSubscribers>0?s.totalRevenue/s.totalSubscribers:0)}</div>
+      </div>
+    </div>
+
+    <div class="card" style="padding:0;overflow:hidden;margin-bottom:24px">
+      <div style="padding:12px 16px 8px;border-bottom:1px solid var(--bd)"><h3 style="font-size:12px;font-weight:600;color:var(--t2);margin:0">Funnel Flow <span style="color:var(--t3);font-weight:400">${lbl}</span></h3></div>
+      <div style="display:grid;grid-template-columns:1fr auto 1fr auto 1fr auto 1fr auto 1fr;align-items:center;padding:16px 12px">
+        <div style="text-align:center">
+          <div style="font-size:20px;font-weight:800;color:var(--blue)">${N(ff.pageVisits)}</div>
+          <div style="font-size:9px;color:var(--t3);text-transform:uppercase;margin-top:2px">Page Visits</div>
+        </div>
+        <div style="text-align:center;padding:0 4px">
+          <div style="color:var(--t3);font-size:14px">&rarr;</div>
+          <div style="font-size:10px;font-weight:600;color:var(--green)">${ff.rates.visitToSub}%</div>
+        </div>
+        <div style="text-align:center">
+          <div style="font-size:20px;font-weight:800;color:var(--green)">${N(ff.subscribers)}</div>
+          <div style="font-size:9px;color:var(--t3);text-transform:uppercase;margin-top:2px">Leads</div>
+        </div>
+        <div style="text-align:center;padding:0 4px">
+          <div style="color:var(--t3);font-size:14px">&rarr;</div>
+          <div style="font-size:10px;font-weight:600;color:var(--purple)">${ff.rates.subToVsl}%</div>
+        </div>
+        <div style="text-align:center">
+          <div style="font-size:20px;font-weight:800;color:var(--purple)">${N(ff.vslVisitors)}</div>
+          <div style="font-size:9px;color:var(--t3);text-transform:uppercase;margin-top:2px">VSL Visitors</div>
+        </div>
+        <div style="text-align:center;padding:0 4px">
+          <div style="color:var(--t3);font-size:14px">&rarr;</div>
+          <div style="font-size:10px;font-weight:600;color:var(--amber)">${ff.rates.vslToCta}%</div>
+        </div>
+        <div style="text-align:center">
+          <div style="font-size:20px;font-weight:800;color:var(--amber)">${N(ff.ctaClicks)}</div>
+          <div style="font-size:9px;color:var(--t3);text-transform:uppercase;margin-top:2px">CTA Clicks</div>
+        </div>
+        <div style="text-align:center;padding:0 4px">
+          <div style="color:var(--t3);font-size:14px">&rarr;</div>
+          <div style="font-size:10px;font-weight:600;color:var(--rose)">${ff.rates.ctaToPurchase}%</div>
+        </div>
+        <div style="text-align:center">
+          <div style="font-size:20px;font-weight:800;color:var(--rose)">${N(ff.purchases)}</div>
+          <div style="font-size:9px;color:var(--t3);text-transform:uppercase;margin-top:2px">Purchases</div>
+        </div>
       </div>
     </div>
 
@@ -298,6 +342,105 @@ function renderYtPage(){
     </div>`}).join('')||'<div class="em">No videos match your filter</div>';
 
   document.querySelector('.mn').innerHTML=`<div class="ph"><h1>YouTube &rarr; Funnel</h1><button class="btn" onclick="go('youtube')">Refresh</button></div>${cs}${controls}<div class="tc"><h3>Video Performance <span style="font-size:12px;color:var(--t3)">(${vids.length} videos)</span></h3>${vs}</div>`;
+}
+
+// ============ VSL ============
+async function pVsl(){
+  document.getElementById('app').innerHTML=sh('<div class="ld">Loading VSL data...</div>');
+  try{
+    const[vs,cs]=await Promise.all([
+      af('/api/dashboard/vsl-stats'),
+      af('/api/dashboard/checkout-stats'),
+    ]);
+    rVsl(vs,cs);
+  }catch(e){if(e.message!=='auth')document.querySelector('.mn').innerHTML=`<div class="er">${e.message}</div>`}
+}
+function rVsl(vs,cs){
+  function mBar(label,val,max,col){
+    const w=max>0?Math.max(val/max*100,1):0;
+    const pct=max>0?((val/max)*100).toFixed(1)+'%':'0%';
+    return`<div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
+      <div style="width:70px;font-size:11px;color:var(--t3);text-align:right">${label}</div>
+      <div style="flex:1;height:28px;background:var(--s3);border-radius:4px;overflow:hidden;position:relative">
+        <div style="height:100%;width:${w}%;background:${col};border-radius:4px;transition:width .3s"></div>
+        <span style="position:absolute;left:8px;top:50%;transform:translateY(-50%);font-size:11px;font-weight:600;color:var(--t1)">${val} visitors (${pct})</span>
+      </div>
+    </div>`;
+  }
+
+  const base=vs.uniqueVisitors||vs.totalVisits||1;
+  const milestones=mBar('Started',base,base,'var(--blue)')+
+    mBar('25%',vs.watch25,base,'var(--green)')+
+    mBar('50%',vs.watch50,base,'var(--cyan)')+
+    mBar('75%',vs.watch75,base,'var(--purple)')+
+    mBar('100%',vs.watchComplete,base,'var(--amber)');
+
+  document.querySelector('.mn').innerHTML=`
+    <div class="ph"><h1>VSL Performance</h1><button class="btn" onclick="go('vsl')">Refresh</button></div>
+
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--bd);border-radius:var(--r);overflow:hidden;margin-bottom:24px">
+      <div style="background:var(--s1);padding:20px;text-align:center">
+        <div style="font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">VSL Visits</div>
+        <div style="font-size:30px;font-weight:800;color:var(--blue);line-height:1">${N(vs.totalVisits)}</div>
+        <div style="font-size:11px;color:var(--t3);margin-top:4px">${vs.uniqueVisitors} unique</div>
+      </div>
+      <div style="background:var(--s1);padding:20px;text-align:center">
+        <div style="font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Watched 100%</div>
+        <div style="font-size:30px;font-weight:800;color:var(--amber);line-height:1">${N(vs.watchComplete)}</div>
+        <div style="font-size:11px;color:var(--t3);margin-top:4px">${base>0?((vs.watchComplete/base)*100).toFixed(1):'0'}% of visitors</div>
+      </div>
+      <div style="background:var(--s1);padding:20px;text-align:center">
+        <div style="font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">CTA Clicks</div>
+        <div style="font-size:30px;font-weight:800;color:var(--green);line-height:1">${N(vs.ctaClicks)}</div>
+        <div style="font-size:11px;color:var(--green);margin-top:4px;font-weight:600">${vs.ctaRate}% click rate</div>
+      </div>
+      <div style="background:var(--s1);padding:20px;text-align:center">
+        <div style="font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Purchases</div>
+        <div style="font-size:30px;font-weight:800;color:var(--rose);line-height:1">${N(cs.completedPurchases)}</div>
+        <div style="font-size:11px;color:var(--t3);margin-top:4px">${$(cs.revenue)} revenue</div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:24px">
+      <h3 style="font-size:12px;font-weight:600;color:var(--t2);margin-bottom:16px">Watch Milestones</h3>
+      ${vs.totalVisits>0?milestones:'<div class="em">No VSL data yet. Milestones will appear once visitors watch your sales video.</div>'}
+    </div>
+
+    <div class="card" style="margin-bottom:24px">
+      <h3 style="font-size:12px;font-weight:600;color:var(--t2);margin-bottom:16px">Checkout Funnel</h3>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px">
+        <div style="text-align:center;padding:16px;background:var(--bg);border-radius:8px">
+          <div style="font-size:24px;font-weight:700;color:var(--amber)">${N(cs.checkoutStarts)}</div>
+          <div style="font-size:10px;color:var(--t3);margin-top:4px">Checkout Starts</div>
+        </div>
+        <div style="text-align:center;padding:16px;background:var(--bg);border-radius:8px">
+          <div style="font-size:24px;font-weight:700;color:var(--green)">${N(cs.completedPurchases)}</div>
+          <div style="font-size:10px;color:var(--t3);margin-top:4px">Completed</div>
+        </div>
+        <div style="text-align:center;padding:16px;background:var(--bg);border-radius:8px">
+          <div style="font-size:24px;font-weight:700;color:${cs.abandonmentRate>50?'var(--rose)':'var(--t2)'}">${cs.abandonmentRate}%</div>
+          <div style="font-size:10px;color:var(--t3);margin-top:4px">Abandonment</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3 style="font-size:12px;font-weight:600;color:var(--t2);margin-bottom:16px">Refund Rates</h3>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px">
+        <div style="text-align:center;padding:16px;background:var(--bg);border-radius:8px">
+          <div style="font-size:24px;font-weight:700;color:var(--t2)">${N(cs.totalRefunds)}</div>
+          <div style="font-size:10px;color:var(--t3);margin-top:4px">Total Refunds</div>
+        </div>
+        <div style="text-align:center;padding:16px;background:var(--bg);border-radius:8px">
+          <div style="font-size:24px;font-weight:700;color:${cs.refundRate7d>10?'var(--rose)':'var(--green)'}">${cs.refundRate7d}%</div>
+          <div style="font-size:10px;color:var(--t3);margin-top:4px">7-Day Refund Rate</div>
+        </div>
+        <div style="text-align:center;padding:16px;background:var(--bg);border-radius:8px">
+          <div style="font-size:24px;font-weight:700;color:${cs.refundRate30d>10?'var(--rose)':'var(--green)'}">${cs.refundRate30d}%</div>
+          <div style="font-size:10px;color:var(--t3);margin-top:4px">30-Day Refund Rate</div>
+        </div>
+      </div>
+    </div>`;
 }
 
 // ============ EMAILS ============

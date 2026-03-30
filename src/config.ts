@@ -7,6 +7,7 @@ export const config = {
   stripe: {
     secretKey: process.env.STRIPE_SECRET_KEY || '',
     webhookSecret: process.env.STRIPE_WEBHOOK_SECRET || '',
+    productIds: (process.env.STRIPE_PRODUCT_IDS || '').split(',').map(s => s.trim()).filter(Boolean),
   },
   turso: {
     url: process.env.TURSO_DATABASE_URL || '',

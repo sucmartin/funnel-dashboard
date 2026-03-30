@@ -32,7 +32,7 @@ function detectPage(){
   if(attr)return attr;
   var p=window.location.pathname.toLowerCase();
   if(p.includes("optin")||p.includes("opt-in")||p==="/")return"optin";
-  if(p.includes("vsl")||p.includes("sales")||p.includes("video"))return"vsl";
+  if(p.includes("vsl")||p.includes("sales")||p.includes("video")||p.includes("offer"))return"vsl";
   if(p.includes("checkout")||p.includes("payment"))return"checkout";
   if(p.includes("thank"))return"thank_you";
   return p.replace(/^\\//, "")||"unknown";
@@ -58,6 +58,44 @@ function autoIntercept(){
 }
 if(document.readyState==="loading"){document.addEventListener("DOMContentLoaded",autoIntercept)}else{autoIntercept()}
 
-window.FunnelTracker={track:track,trackOptinSubmit:trackOptin,getVisitorId:function(){return vid},getUtms:getUtms};
+/* VSL video milestone tracking */
+var vslFired={}; /* deduplicate milestones */
+function trackVideoProgress(selector){
+  var el=typeof selector==="string"?document.querySelector(selector):selector;
+  if(!el||el.tagName!=="VIDEO")return;
+  var milestones=[25,50,75,100];
+  el.addEventListener("timeupdate",function(){
+    if(!el.duration)return;
+    var pct=Math.floor(el.currentTime/el.duration*100);
+    for(var i=0;i<milestones.length;i++){
+      var m=milestones[i];
+      if(pct>=m&&!vslFired[m]){vslFired[m]=true;track(m===100?"vsl_complete":"vsl_watch_"+m,{percent:m})}
+    }
+  });
+}
+
+/* CTA click tracking */
+function trackCTAClick(selector){
+  var els=document.querySelectorAll(selector);
+  for(var i=0;i<els.length;i++){
+    els[i].addEventListener("click",function(){track("cta_click",{button:selector})});
+  }
+}
+
+/* Auto-detect VSL page: attach video tracking + CTA tracking */
+var pg=detectPage();
+if(pg==="vsl"||pg==="offer"||window.location.pathname.includes("offer")){
+  function autoVSL(){
+    var v=document.querySelector("video");if(v)trackVideoProgress(v);
+    var cta=document.querySelectorAll("[data-funnel-cta]");
+    if(cta.length)trackCTAClick("[data-funnel-cta]");
+  }
+  if(document.readyState==="loading"){document.addEventListener("DOMContentLoaded",autoVSL)}else{setTimeout(autoVSL,500)}
+}
+
+/* Auto-fire checkout_start on checkout pages */
+if(pg==="checkout"){track("checkout_start")}
+
+window.FunnelTracker={track:track,trackOptinSubmit:trackOptin,trackVideoProgress:trackVideoProgress,trackCTAClick:trackCTAClick,getVisitorId:function(){return vid},getUtms:getUtms};
 console.log("[FunnelTracker] Initialized | visitor="+vid+" | page="+detectPage()+" | utms="+JSON.stringify(utms));
 })();`;

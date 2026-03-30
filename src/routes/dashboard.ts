@@ -5,6 +5,7 @@ import {
   getPageviewsByDay, getSubscribersByDay, getRevenueByDay, getCampaignPageviews,
   addCampaignCost, getCampaignCosts, getCostEntries,
   getSubscriberScoring, getWeeklyStats, getDailySummary,
+  getVSLStats, getCheckoutStats, getFunnelFlow,
 } from '../db/queries';
 import { getRecentVideos, getChannelStats, getAllVideos } from '../services/youtube';
 import { getEmailCampaigns, getGroupStats } from '../services/mailerlite-stats';
@@ -244,6 +245,33 @@ router.get('/summary', async (req: Request, res: Response) => {
   if (!checkAuth(req, res)) return;
   try { res.json(await getDailySummary()); }
   catch (err) { console.error('[Dashboard] Summary error:', err); res.status(500).json({ error: 'Failed' }); }
+});
+
+// GET /api/dashboard/vsl-stats — VSL engagement data
+router.get('/vsl-stats', async (req: Request, res: Response) => {
+  if (!checkAuth(req, res)) return;
+  try {
+    const days = req.query.days ? parseInt(req.query.days as string) : undefined;
+    res.json(await getVSLStats(days));
+  } catch (err) { console.error('[Dashboard] VSL stats error:', err); res.status(500).json({ error: 'Failed' }); }
+});
+
+// GET /api/dashboard/checkout-stats — checkout funnel + refund rates
+router.get('/checkout-stats', async (req: Request, res: Response) => {
+  if (!checkAuth(req, res)) return;
+  try {
+    const days = req.query.days ? parseInt(req.query.days as string) : undefined;
+    res.json(await getCheckoutStats(days));
+  } catch (err) { console.error('[Dashboard] Checkout stats error:', err); res.status(500).json({ error: 'Failed' }); }
+});
+
+// GET /api/dashboard/funnel-flow — full 5-stage funnel with drop-offs
+router.get('/funnel-flow', async (req: Request, res: Response) => {
+  if (!checkAuth(req, res)) return;
+  try {
+    const days = req.query.days ? parseInt(req.query.days as string) : undefined;
+    res.json(await getFunnelFlow(days));
+  } catch (err) { console.error('[Dashboard] Funnel flow error:', err); res.status(500).json({ error: 'Failed' }); }
 });
 
 export default router;
