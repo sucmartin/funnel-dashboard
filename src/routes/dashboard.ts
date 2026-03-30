@@ -82,17 +82,19 @@ router.get('/weekly', async (req: Request, res: Response) => {
 router.get('/funnel', async (req: Request, res: Response) => {
   if (!checkAuth(req, res)) return;
   try {
-    const [campaigns, campaignPV, costs, scoring, ytData] = await Promise.all([
+    const [campaigns, campaignPV, costs, scoring] = await Promise.all([
       getCampaignBreakdown(),
       getCampaignPageviews(),
       getCampaignCosts(),
       getSubscriberScoring(),
-      (config.youtube.apiKey && config.youtube.channelId)
-        ? Promise.all([getChannelStats(), getRecentVideos(30)])
-        : Promise.resolve([null, []] as const),
     ]);
 
-    const [channel, videos] = ytData as [any, any[]];
+    let channel = null, videos: any[] = [];
+    try {
+      if (config.youtube.apiKey && config.youtube.channelId) {
+        [channel, videos] = await Promise.all([getChannelStats(), getRecentVideos(30)]);
+      }
+    } catch (ytErr) { console.warn('[Dashboard] YouTube fetch failed in funnel, skipping:', ytErr); }
     const pvMap = new Map(campaignPV.map(p => [p.campaign, p.views]));
     const costMap = new Map(costs.map(c => [c.campaign, c.totalSpend]));
     const scoreMap = new Map(scoring.map(s => [s.campaign + '|' + s.source, s]));
