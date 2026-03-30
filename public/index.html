@@ -161,6 +161,8 @@ function rOv(){
   const drBtn=(d,lbl)=>`<button class="${ovDays===d?'active':''}" onclick="pOv(${d})">${lbl}</button>`;
   const lbl=ovDays===0?'All time':ovDays===1?'Today':ovDays+'d';
 
+  const revPerSub=s.totalSubscribers>0?(s.totalRevenue/s.totalSubscribers).toFixed(2):0;
+
   document.querySelector('.mn').innerHTML=`
     <div class="ph"><h1>Overview</h1>
       <div style="display:flex;align-items:center;gap:8px">
@@ -169,22 +171,50 @@ function rOv(){
       </div>
     </div>
 
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr 1fr;gap:12px;margin-bottom:20px">
-      <div class="card st"><div class="lb">Pageviews</div><div class="vl" style="color:var(--blue)">${N(s.totalPageviews)}</div><div class="sb2">today: ${td.pageviews}</div></div>
-      <div class="card st"><div class="lb">Subscribers</div><div class="vl" style="color:var(--green)">${N(s.totalSubscribers)}</div><div class="sb2">today: ${td.subscribers}</div></div>
-      <div class="card st"><div class="lb">Sales</div><div class="vl" style="color:var(--purple)">${N(s.totalPurchases)}</div><div class="sb2">today: ${td.purchases}</div></div>
-      <div class="card st"><div class="lb">Revenue</div><div class="vl" style="color:var(--amber)">${$(s.totalRevenue)}</div><div class="sb2">today: ${$(td.revenue)}</div></div>
-      <div class="card st"><div class="lb">Opt-in Rate</div><div class="vl" style="color:var(--cyan)">${or}</div><div class="sb2">${br} purchase rate</div></div>
-    </div>
-
-    <div class="card fb" style="padding:10px 18px;margin-bottom:20px">
-      <div class="step"><div class="v" style="color:var(--blue)">${N(s.totalPageviews)}</div><div class="l">Views</div></div>
-      <div class="arr">&rarr;<br><span class="rt">${or}</span></div>
-      <div class="step"><div class="v" style="color:var(--green)">${N(s.totalSubscribers)}</div><div class="l">Leads</div></div>
-      <div class="arr">&rarr;<br><span class="rt">${br}</span></div>
-      <div class="step"><div class="v" style="color:var(--purple)">${N(s.totalPurchases)}</div><div class="l">Sales</div></div>
-      <div class="arr">&rarr;</div>
-      <div class="step"><div class="v" style="color:var(--amber)">${$(s.totalRevenue)}</div><div class="l">Revenue</div></div>
+    <div class="card" style="padding:0;overflow:hidden;margin-bottom:20px">
+      <div style="display:grid;grid-template-columns:1fr auto 1fr auto 1fr auto 1fr;align-items:center">
+        <div style="padding:20px 24px;text-align:center">
+          <div style="font-size:11px;color:var(--t3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Views</div>
+          <div style="font-size:28px;font-weight:800;color:var(--blue)">${N(s.totalPageviews)}</div>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:center;padding:0 4px">
+          <div style="color:var(--t3);font-size:16px">&rarr;</div>
+          <div style="font-size:11px;font-weight:600;color:var(--green)">${or}</div>
+        </div>
+        <div style="padding:20px 24px;text-align:center">
+          <div style="font-size:11px;color:var(--t3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Leads</div>
+          <div style="font-size:28px;font-weight:800;color:var(--green)">${N(s.totalSubscribers)}</div>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:center;padding:0 4px">
+          <div style="color:var(--t3);font-size:16px">&rarr;</div>
+          <div style="font-size:11px;font-weight:600;color:var(--purple)">${br}</div>
+        </div>
+        <div style="padding:20px 24px;text-align:center">
+          <div style="font-size:11px;color:var(--t3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Sales</div>
+          <div style="font-size:28px;font-weight:800;color:var(--purple)">${N(s.totalPurchases)}</div>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:center;padding:0 4px">
+          <div style="color:var(--t3);font-size:16px">&rarr;</div>
+        </div>
+        <div style="padding:20px 24px;text-align:center">
+          <div style="font-size:11px;color:var(--t3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Revenue</div>
+          <div style="font-size:28px;font-weight:800;color:var(--amber)">${$(s.totalRevenue)}</div>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;border-top:1px solid var(--bd);background:rgba(0,0,0,.15)">
+        <div style="padding:10px 24px;text-align:center;border-right:1px solid var(--bd)">
+          <span style="color:var(--t3);font-size:11px">Opt-in Rate</span>
+          <span style="color:var(--green);font-weight:700;font-size:13px;margin-left:8px">${or}</span>
+        </div>
+        <div style="padding:10px 24px;text-align:center;border-right:1px solid var(--bd)">
+          <span style="color:var(--t3);font-size:11px">Purchase Rate</span>
+          <span style="color:var(--purple);font-weight:700;font-size:13px;margin-left:8px">${br}</span>
+        </div>
+        <div style="padding:10px 24px;text-align:center">
+          <span style="color:var(--t3);font-size:11px">Rev / Lead</span>
+          <span style="color:var(--amber);font-weight:700;font-size:13px;margin-left:8px">${$(revPerSub)}</span>
+        </div>
+      </div>
     </div>
 
     <div class="grid g2">
