@@ -108,11 +108,13 @@ export async function upsertSubscriber(data: {
   await ensureSchema();
   const db = getDb();
   const ch = data.channel_id || DC;
+  // Use ON CONFLICT(email) for compatibility with old schema (UNIQUE on email only)
   await db.execute({
     sql: `INSERT INTO subscribers (channel_id, email, visitor_id, utm_source, utm_campaign, utm_medium)
           VALUES (?, ?, ?, ?, ?, ?)
-          ON CONFLICT(channel_id, email) DO UPDATE SET
+          ON CONFLICT(email) DO UPDATE SET
             visitor_id = excluded.visitor_id,
+            channel_id = excluded.channel_id,
             utm_source = COALESCE(excluded.utm_source, subscribers.utm_source),
             utm_campaign = COALESCE(excluded.utm_campaign, subscribers.utm_campaign),
             utm_medium = COALESCE(excluded.utm_medium, subscribers.utm_medium)`,

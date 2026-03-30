@@ -138,7 +138,7 @@ export async function ensureSchema(): Promise<void> {
 
   // Run migrations (silently ignore errors — columns may already exist)
   for (const migration of MIGRATIONS) {
-    try { await db.execute(migration); } catch (_) { /* column already exists */ }
+    try { await db.execute(migration); console.log('[Schema] Migration OK:', migration.slice(0, 60)); } catch (e) { console.log('[Schema] Migration skipped (expected):', (e as Error).message?.slice(0, 80)); }
   }
 
   // Ensure default channel exists

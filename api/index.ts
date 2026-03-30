@@ -21,7 +21,7 @@ app.use(express.json());
 let configLoaded = false;
 app.use(async (_req, _res, next) => {
   if (!configLoaded) {
-    try { await reloadConfigFromDB(); configLoaded = true; } catch (e) { /* env vars still work */ }
+    try { await reloadConfigFromDB(); configLoaded = true; } catch (e) { console.error('[Init] Config load failed:', e); configLoaded = true; /* proceed with env vars */ }
   }
   next();
 });
