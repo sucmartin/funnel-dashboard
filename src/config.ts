@@ -1,3 +1,7 @@
+// Note: getAllSettings is imported dynamically to avoid circular dependency
+// (config.ts → queries.ts → connection.ts → config.ts)
+
+// Static config from env vars (always available)
 export const config = {
   allowedOrigins: (process.env.ALLOWED_ORIGINS || 'http://localhost:5173,https://*.lovable.app').split(',').map(s => s.trim()),
   mailerlite: {
@@ -19,3 +23,78 @@ export const config = {
   },
   dashboardSecret: process.env.DASHBOARD_SECRET || '',
 };
+
+// Settings keys that can be configured from the dashboard
+const SETTINGS_KEYS = [
+  'MAILERLITE_API_KEY',
+  'MAILERLITE_GROUP_ID',
+  'STRIPE_SECRET_KEY',
+  'STRIPE_WEBHOOK_SECRET',
+  'STRIPE_PRODUCT_IDS',
+  'YOUTUBE_API_KEY',
+  'YOUTUBE_CHANNEL_ID',
+  'DASHBOARD_SECRET',
+  'OPT_IN_URL',
+] as const;
+
+// Reload config from DB settings (call on startup and after settings change)
+let dbSettingsCache: Record<string, string> = {};
+let lastLoaded = 0;
+
+export async function reloadConfigFromDB(): Promise<void> {
+  try {
+    const { getAllSettings } = await import('./db/queries');
+    dbSettingsCache = await getAllSettings();
+    lastLoaded = Date.now();
+
+    // Override config with DB values where they exist
+    if (dbSettingsCache.MAILERLITE_API_KEY) config.mailerlite.apiKey = dbSettingsCache.MAILERLITE_API_KEY;
+    if (dbSettingsCache.MAILERLITE_GROUP_ID) config.mailerlite.groupId = dbSettingsCache.MAILERLITE_GROUP_ID;
+    if (dbSettingsCache.STRIPE_SECRET_KEY) config.stripe.secretKey = dbSettingsCache.STRIPE_SECRET_KEY;
+    if (dbSettingsCache.STRIPE_WEBHOOK_SECRET) config.stripe.webhookSecret = dbSettingsCache.STRIPE_WEBHOOK_SECRET;
+    if (dbSettingsCache.STRIPE_PRODUCT_IDS) config.stripe.productIds = dbSettingsCache.STRIPE_PRODUCT_IDS.split(',').map(s => s.trim()).filter(Boolean);
+    if (dbSettingsCache.YOUTUBE_API_KEY) config.youtube.apiKey = dbSettingsCache.YOUTUBE_API_KEY;
+    if (dbSettingsCache.YOUTUBE_CHANNEL_ID) config.youtube.channelId = dbSettingsCache.YOUTUBE_CHANNEL_ID;
+    if (dbSettingsCache.DASHBOARD_SECRET) config.dashboardSecret = dbSettingsCache.DASHBOARD_SECRET;
+  } catch (err) {
+    console.warn('[Config] Failed to load settings from DB, using env vars:', err);
+  }
+}
+
+// Mask sensitive values for display
+export function maskValue(value: string): string {
+  if (!value || value.length < 8) return '••••••••';
+  return value.slice(0, 6) + '••••' + value.slice(-4);
+}
+
+// Get all configurable settings with masked values
+export function getConfigForDisplay(): Array<{ key: string; value: string; masked: string; source: 'db' | 'env' | 'none' }> {
+  return SETTINGS_KEYS.map(key => {
+    const dbVal = dbSettingsCache[key];
+    const envVal = getEnvForKey(key);
+    const value = dbVal || envVal || '';
+    const source = dbVal ? 'db' as const : envVal ? 'env' as const : 'none' as const;
+    const isSensitive = key.includes('KEY') || key.includes('SECRET') || key.includes('TOKEN');
+    return {
+      key,
+      value: isSensitive ? '' : value, // Never send sensitive values to frontend
+      masked: value ? (isSensitive ? maskValue(value) : value) : '',
+      source,
+    };
+  });
+}
+
+function getEnvForKey(key: string): string {
+  switch (key) {
+    case 'MAILERLITE_API_KEY': return process.env.MAILERLITE_API_KEY || '';
+    case 'MAILERLITE_GROUP_ID': return process.env.MAILERLITE_GROUP_ID || '';
+    case 'STRIPE_SECRET_KEY': return process.env.STRIPE_SECRET_KEY || '';
+    case 'STRIPE_WEBHOOK_SECRET': return process.env.STRIPE_WEBHOOK_SECRET || '';
+    case 'STRIPE_PRODUCT_IDS': return process.env.STRIPE_PRODUCT_IDS || '';
+    case 'YOUTUBE_API_KEY': return process.env.YOUTUBE_API_KEY || '';
+    case 'YOUTUBE_CHANNEL_ID': return process.env.YOUTUBE_CHANNEL_ID || '';
+    case 'DASHBOARD_SECRET': return process.env.DASHBOARD_SECRET || '';
+    case 'OPT_IN_URL': return process.env.OPT_IN_URL || '';
+    default: return '';
+  }
+}

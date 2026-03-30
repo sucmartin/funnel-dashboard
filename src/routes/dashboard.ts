@@ -1,11 +1,12 @@
 import { Router, Request, Response } from 'express';
-import { config } from '../config';
+import { config, getConfigForDisplay, reloadConfigFromDB } from '../config';
 import {
   getDashboardStats, getCampaignBreakdown, getRecentActivity,
   getPageviewsByDay, getSubscribersByDay, getRevenueByDay, getCampaignPageviews,
   addCampaignCost, getCampaignCosts, getCostEntries,
   getSubscriberScoring, getWeeklyStats, getDailySummary,
   getVSLStats, getCheckoutStats, getFunnelFlow,
+  setSetting,
 } from '../db/queries';
 import { getRecentVideos, getChannelStats, getAllVideos } from '../services/youtube';
 import { getEmailCampaigns, getGroupStats } from '../services/mailerlite-stats';
@@ -272,6 +273,28 @@ router.get('/funnel-flow', async (req: Request, res: Response) => {
     const days = req.query.days ? parseInt(req.query.days as string) : undefined;
     res.json(await getFunnelFlow(days));
   } catch (err) { console.error('[Dashboard] Funnel flow error:', err); res.status(500).json({ error: 'Failed' }); }
+});
+
+// GET /api/dashboard/settings — get all configurable settings (masked)
+router.get('/settings', async (req: Request, res: Response) => {
+  if (!checkAuth(req, res)) return;
+  try {
+    await reloadConfigFromDB();
+    res.json(getConfigForDisplay());
+  } catch (err) { console.error('[Dashboard] Settings error:', err); res.status(500).json({ error: 'Failed' }); }
+});
+
+// PUT /api/dashboard/settings — update a setting
+router.put('/settings', async (req: Request, res: Response) => {
+  if (!checkAuth(req, res)) return;
+  try {
+    const { key, value } = req.body;
+    if (!key) { res.status(400).json({ error: 'key required' }); return; }
+    await setSetting(key, value || '');
+    await reloadConfigFromDB();
+    console.log(`[Settings] Updated: ${key}`);
+    res.json({ ok: true });
+  } catch (err) { console.error('[Dashboard] Settings update error:', err); res.status(500).json({ error: 'Failed' }); }
 });
 
 export default router;

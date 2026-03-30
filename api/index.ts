@@ -1,6 +1,6 @@
 import express from 'express';
 import cors from 'cors';
-import { config } from '../src/config';
+import { config, reloadConfigFromDB } from '../src/config';
 import trackRouter from '../src/routes/track';
 import webhookRouter from '../src/routes/webhook';
 import dashboardRouter from '../src/routes/dashboard';
@@ -16,6 +16,15 @@ app.use('/api/webhooks', express.raw({ type: 'application/json' }));
 
 // JSON body parser for all other routes
 app.use(express.json());
+
+// Load DB settings on first request (serverless-friendly)
+let configLoaded = false;
+app.use(async (_req, _res, next) => {
+  if (!configLoaded) {
+    try { await reloadConfigFromDB(); configLoaded = true; } catch (e) { /* env vars still work */ }
+  }
+  next();
+});
 
 // Routes
 app.use('/api/track', trackRouter);

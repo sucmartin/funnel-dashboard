@@ -85,6 +85,12 @@ CREATE TABLE IF NOT EXISTS refunds (
 );
 
 CREATE INDEX IF NOT EXISTS idx_refunds_email ON refunds(email);
+
+CREATE TABLE IF NOT EXISTS settings (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL,
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
 `;
 
 export async function ensureSchema(): Promise<void> {

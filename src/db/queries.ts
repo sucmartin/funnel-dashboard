@@ -561,3 +561,39 @@ export async function getFunnelFlow(days?: number) {
     },
   };
 }
+
+// ---- Settings ----
+
+export async function getSetting(key: string): Promise<string | null> {
+  await ensureSchema();
+  const db = getDb();
+  const result = await db.execute({ sql: `SELECT value FROM settings WHERE key = ?`, args: [key] });
+  return result.rows.length > 0 ? (result.rows[0].value as string) : null;
+}
+
+export async function getAllSettings(): Promise<Record<string, string>> {
+  await ensureSchema();
+  const db = getDb();
+  const result = await db.execute(`SELECT key, value FROM settings`);
+  const settings: Record<string, string> = {};
+  for (const row of result.rows) {
+    settings[row.key as string] = row.value as string;
+  }
+  return settings;
+}
+
+export async function setSetting(key: string, value: string): Promise<void> {
+  await ensureSchema();
+  const db = getDb();
+  await db.execute({
+    sql: `INSERT INTO settings (key, value, updated_at) VALUES (?, ?, datetime('now'))
+          ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = datetime('now')`,
+    args: [key, value],
+  });
+}
+
+export async function deleteSetting(key: string): Promise<void> {
+  await ensureSchema();
+  const db = getDb();
+  await db.execute({ sql: `DELETE FROM settings WHERE key = ?`, args: [key] });
+}
