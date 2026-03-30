@@ -176,10 +176,10 @@ export async function getDashboardStats(days?: number, ch = DC) {
   const dp = days ? `AND purchased_at >= datetime('now', '-${days} days')` : '';
 
   const [pageviews, subscribers, purchases, events] = await Promise.all([
-    db.execute({ sql: `SELECT COUNT(*) as count FROM pageviews WHERE channel_id = ? ${dw}`, args: [ch] }),
-    db.execute({ sql: `SELECT COUNT(*) as count FROM subscribers WHERE channel_id = ? ${ds}`, args: [ch] }),
-    db.execute({ sql: `SELECT COUNT(*) as count, COALESCE(SUM(amount_cents), 0) as revenue FROM purchases WHERE channel_id = ? ${dp}`, args: [ch] }),
-    db.execute({ sql: `SELECT COUNT(*) as count FROM events WHERE channel_id = ? ${dw}`, args: [ch] }),
+    db.execute({ sql: `SELECT COUNT(*) as count FROM pageviews WHERE COALESCE(channel_id, 'default') = ? ${dw}`, args: [ch] }),
+    db.execute({ sql: `SELECT COUNT(*) as count FROM subscribers WHERE COALESCE(channel_id, 'default') = ? ${ds}`, args: [ch] }),
+    db.execute({ sql: `SELECT COUNT(*) as count, COALESCE(SUM(amount_cents), 0) as revenue FROM purchases WHERE COALESCE(channel_id, 'default') = ? ${dp}`, args: [ch] }),
+    db.execute({ sql: `SELECT COUNT(*) as count FROM events WHERE COALESCE(channel_id, 'default') = ? ${dw}`, args: [ch] }),
   ]);
 
   return {
@@ -199,12 +199,12 @@ export async function getCampaignBreakdown(ch = DC) {
     FROM (
       SELECT COALESCE(s.utm_campaign, 'direct') as campaign, COALESCE(s.utm_source, 'unknown') as source,
         0 as views, COUNT(DISTINCT s.email) as subscribers, COUNT(DISTINCT p.email) as buyers, COALESCE(SUM(p.amount_cents), 0) as revenue_cents
-      FROM subscribers s LEFT JOIN purchases p ON s.email = p.email AND p.channel_id = ?
-      WHERE s.channel_id = ? GROUP BY s.utm_campaign, s.utm_source
+      FROM subscribers s LEFT JOIN purchases p ON s.email = p.email AND COALESCE(p.channel_id, 'default') = ?
+      WHERE COALESCE(s.channel_id, 'default') = ? GROUP BY s.utm_campaign, s.utm_source
       UNION ALL
       SELECT COALESCE(utm_campaign, 'direct') as campaign, COALESCE(utm_source, 'unknown') as source,
         COUNT(*) as views, 0 as subscribers, 0 as buyers, 0 as revenue_cents
-      FROM pageviews WHERE channel_id = ? GROUP BY utm_campaign, utm_source
+      FROM pageviews WHERE COALESCE(channel_id, 'default') = ? GROUP BY utm_campaign, utm_source
     ) GROUP BY campaign, source ORDER BY views DESC, subscribers DESC`,
     args: [ch, ch, ch],
   });
@@ -219,35 +219,35 @@ export async function getCampaignBreakdown(ch = DC) {
 export async function getRecentActivity(limit = 20, ch = DC) {
   await ensureSchema();
   const db = getDb();
-  const result = await db.execute({ sql: `SELECT event_name, visitor_id, email, created_at FROM events WHERE channel_id = ? ORDER BY created_at DESC LIMIT ?`, args: [ch, limit] });
+  const result = await db.execute({ sql: `SELECT event_name, visitor_id, email, created_at FROM events WHERE COALESCE(channel_id, 'default') = ? ORDER BY created_at DESC LIMIT ?`, args: [ch, limit] });
   return result.rows.map(row => ({ event: row.event_name as string, visitor: (row.visitor_id as string).slice(0, 8), email: row.email as string|null, time: row.created_at as string }));
 }
 
 export async function getSubscribersByDay(days = 30, ch = DC) {
   await ensureSchema();
   const db = getDb();
-  const result = await db.execute({ sql: `SELECT DATE(subscribed_at) as day, COUNT(*) as count FROM subscribers WHERE channel_id = ? AND subscribed_at >= datetime('now', ? || ' days') GROUP BY DATE(subscribed_at) ORDER BY day ASC`, args: [ch, `-${days}`] });
+  const result = await db.execute({ sql: `SELECT DATE(subscribed_at) as day, COUNT(*) as count FROM subscribers WHERE COALESCE(channel_id, 'default') = ? AND subscribed_at >= datetime('now', ? || ' days') GROUP BY DATE(subscribed_at) ORDER BY day ASC`, args: [ch, `-${days}`] });
   return result.rows.map(row => ({ day: row.day as string, count: Number(row.count) }));
 }
 
 export async function getRevenueByDay(days = 30, ch = DC) {
   await ensureSchema();
   const db = getDb();
-  const result = await db.execute({ sql: `SELECT DATE(purchased_at) as day, SUM(amount_cents) as revenue_cents, COUNT(*) as count FROM purchases WHERE channel_id = ? AND purchased_at >= datetime('now', ? || ' days') GROUP BY DATE(purchased_at) ORDER BY day ASC`, args: [ch, `-${days}`] });
+  const result = await db.execute({ sql: `SELECT DATE(purchased_at) as day, SUM(amount_cents) as revenue_cents, COUNT(*) as count FROM purchases WHERE COALESCE(channel_id, 'default') = ? AND purchased_at >= datetime('now', ? || ' days') GROUP BY DATE(purchased_at) ORDER BY day ASC`, args: [ch, `-${days}`] });
   return result.rows.map(row => ({ day: row.day as string, revenue: Number(row.revenue_cents) / 100, count: Number(row.count) }));
 }
 
 export async function getCampaignPageviews(ch = DC) {
   await ensureSchema();
   const db = getDb();
-  const result = await db.execute({ sql: `SELECT COALESCE(utm_campaign, 'direct') as campaign, COUNT(*) as views FROM pageviews WHERE channel_id = ? AND utm_campaign IS NOT NULL AND utm_campaign != '' GROUP BY utm_campaign ORDER BY views DESC`, args: [ch] });
+  const result = await db.execute({ sql: `SELECT COALESCE(utm_campaign, 'direct') as campaign, COUNT(*) as views FROM pageviews WHERE COALESCE(channel_id, 'default') = ? AND utm_campaign IS NOT NULL AND utm_campaign != '' GROUP BY utm_campaign ORDER BY views DESC`, args: [ch] });
   return result.rows.map(row => ({ campaign: row.campaign as string, views: Number(row.views) }));
 }
 
 export async function getPageviewsByDay(days = 30, ch = DC) {
   await ensureSchema();
   const db = getDb();
-  const result = await db.execute({ sql: `SELECT DATE(created_at) as day, COUNT(*) as views FROM pageviews WHERE channel_id = ? AND created_at >= datetime('now', ? || ' days') GROUP BY DATE(created_at) ORDER BY day ASC`, args: [ch, `-${days}`] });
+  const result = await db.execute({ sql: `SELECT DATE(created_at) as day, COUNT(*) as views FROM pageviews WHERE COALESCE(channel_id, 'default') = ? AND created_at >= datetime('now', ? || ' days') GROUP BY DATE(created_at) ORDER BY day ASC`, args: [ch, `-${days}`] });
   return result.rows.map(row => ({ day: row.day as string, views: Number(row.views) }));
 }
 
@@ -262,7 +262,7 @@ export async function addCampaignCost(data: { utm_campaign: string; amount_cents
 export async function getCampaignCosts(ch = DC) {
   await ensureSchema();
   const db = getDb();
-  const result = await db.execute({ sql: `SELECT utm_campaign as campaign, SUM(amount_cents) as total_cents, COUNT(*) as entries FROM campaign_costs WHERE channel_id = ? GROUP BY utm_campaign ORDER BY total_cents DESC`, args: [ch] });
+  const result = await db.execute({ sql: `SELECT utm_campaign as campaign, SUM(amount_cents) as total_cents, COUNT(*) as entries FROM campaign_costs WHERE COALESCE(channel_id, 'default') = ? GROUP BY utm_campaign ORDER BY total_cents DESC`, args: [ch] });
   return result.rows.map(row => ({ campaign: row.campaign as string, totalSpend: Number(row.total_cents) / 100, entries: Number(row.entries) }));
 }
 
@@ -270,8 +270,8 @@ export async function getCostEntries(campaign?: string, ch = DC) {
   await ensureSchema();
   const db = getDb();
   const result = campaign
-    ? await db.execute({ sql: `SELECT * FROM campaign_costs WHERE channel_id = ? AND utm_campaign = ? ORDER BY spend_date DESC`, args: [ch, campaign] })
-    : await db.execute({ sql: `SELECT * FROM campaign_costs WHERE channel_id = ? ORDER BY spend_date DESC LIMIT 50`, args: [ch] });
+    ? await db.execute({ sql: `SELECT * FROM campaign_costs WHERE COALESCE(channel_id, 'default') = ? AND utm_campaign = ? ORDER BY spend_date DESC`, args: [ch, campaign] })
+    : await db.execute({ sql: `SELECT * FROM campaign_costs WHERE COALESCE(channel_id, 'default') = ? ORDER BY spend_date DESC LIMIT 50`, args: [ch] });
   return result.rows.map(row => ({ id: Number(row.id), campaign: row.utm_campaign as string, amount: Number(row.amount_cents) / 100, description: row.description as string|null, date: row.spend_date as string }));
 }
 
@@ -285,8 +285,8 @@ export async function getSubscriberScoring(ch = DC) {
       COUNT(DISTINCT s.email) as total_subs, COUNT(DISTINCT p.email) as buyers, COALESCE(SUM(p.amount_cents), 0) as revenue_cents,
       ROUND(CAST(COUNT(DISTINCT p.email) AS FLOAT) / NULLIF(COUNT(DISTINCT s.email), 0) * 100, 1) as buy_rate,
       ROUND(CAST(COALESCE(SUM(p.amount_cents), 0) AS FLOAT) / NULLIF(COUNT(DISTINCT s.email), 0) / 100, 2) as rev_per_sub
-    FROM subscribers s LEFT JOIN purchases p ON s.email = p.email AND p.channel_id = ?
-    WHERE s.channel_id = ? GROUP BY s.utm_campaign, s.utm_source ORDER BY rev_per_sub DESC`,
+    FROM subscribers s LEFT JOIN purchases p ON s.email = p.email AND COALESCE(p.channel_id, 'default') = ?
+    WHERE COALESCE(s.channel_id, 'default') = ? GROUP BY s.utm_campaign, s.utm_source ORDER BY rev_per_sub DESC`,
     args: [ch, ch],
   });
   return result.rows.map(row => {
@@ -305,9 +305,9 @@ export async function getWeeklyStats(weeks = 12, ch = DC) {
   const db = getDb();
   const d = `-${weeks * 7}`;
   const [pvR, subR, revR] = await Promise.all([
-    db.execute({ sql: `SELECT strftime('%Y-W%W', created_at) as week, COUNT(*) as count FROM pageviews WHERE channel_id = ? AND created_at >= datetime('now', ? || ' days') GROUP BY week ORDER BY week ASC`, args: [ch, d] }),
-    db.execute({ sql: `SELECT strftime('%Y-W%W', subscribed_at) as week, COUNT(*) as count FROM subscribers WHERE channel_id = ? AND subscribed_at >= datetime('now', ? || ' days') GROUP BY week ORDER BY week ASC`, args: [ch, d] }),
-    db.execute({ sql: `SELECT strftime('%Y-W%W', purchased_at) as week, COUNT(*) as count, COALESCE(SUM(amount_cents),0) as rev FROM purchases WHERE channel_id = ? AND purchased_at >= datetime('now', ? || ' days') GROUP BY week ORDER BY week ASC`, args: [ch, d] }),
+    db.execute({ sql: `SELECT strftime('%Y-W%W', created_at) as week, COUNT(*) as count FROM pageviews WHERE COALESCE(channel_id, 'default') = ? AND created_at >= datetime('now', ? || ' days') GROUP BY week ORDER BY week ASC`, args: [ch, d] }),
+    db.execute({ sql: `SELECT strftime('%Y-W%W', subscribed_at) as week, COUNT(*) as count FROM subscribers WHERE COALESCE(channel_id, 'default') = ? AND subscribed_at >= datetime('now', ? || ' days') GROUP BY week ORDER BY week ASC`, args: [ch, d] }),
+    db.execute({ sql: `SELECT strftime('%Y-W%W', purchased_at) as week, COUNT(*) as count, COALESCE(SUM(amount_cents),0) as rev FROM purchases WHERE COALESCE(channel_id, 'default') = ? AND purchased_at >= datetime('now', ? || ' days') GROUP BY week ORDER BY week ASC`, args: [ch, d] }),
   ]);
   return {
     pageviews: pvR.rows.map(r => ({ week: r.week as string, count: Number(r.count) })),
@@ -323,10 +323,10 @@ export async function getDailySummary(ch = DC) {
   const db = getDb();
   const today = new Date().toISOString().split('T')[0];
   const [pv, subs, purchases, uniqueVis] = await Promise.all([
-    db.execute({ sql: `SELECT COUNT(*) as c FROM pageviews WHERE channel_id = ? AND DATE(created_at) = ?`, args: [ch, today] }),
-    db.execute({ sql: `SELECT COUNT(*) as c FROM subscribers WHERE channel_id = ? AND DATE(subscribed_at) = ?`, args: [ch, today] }),
-    db.execute({ sql: `SELECT COUNT(*) as c, COALESCE(SUM(amount_cents),0) as rev FROM purchases WHERE channel_id = ? AND DATE(purchased_at) = ?`, args: [ch, today] }),
-    db.execute({ sql: `SELECT COUNT(DISTINCT visitor_id) as c FROM pageviews WHERE channel_id = ? AND DATE(created_at) = ?`, args: [ch, today] }),
+    db.execute({ sql: `SELECT COUNT(*) as c FROM pageviews WHERE COALESCE(channel_id, 'default') = ? AND DATE(created_at) = ?`, args: [ch, today] }),
+    db.execute({ sql: `SELECT COUNT(*) as c FROM subscribers WHERE COALESCE(channel_id, 'default') = ? AND DATE(subscribed_at) = ?`, args: [ch, today] }),
+    db.execute({ sql: `SELECT COUNT(*) as c, COALESCE(SUM(amount_cents),0) as rev FROM purchases WHERE COALESCE(channel_id, 'default') = ? AND DATE(purchased_at) = ?`, args: [ch, today] }),
+    db.execute({ sql: `SELECT COUNT(DISTINCT visitor_id) as c FROM pageviews WHERE COALESCE(channel_id, 'default') = ? AND DATE(created_at) = ?`, args: [ch, today] }),
   ]);
   return { date: today, pageviews: Number(pv.rows[0].c), uniqueVisitors: Number(uniqueVis.rows[0].c), subscribers: Number(subs.rows[0].c), purchases: Number(purchases.rows[0].c), revenue: Number(purchases.rows[0].rev) / 100 };
 }
@@ -337,11 +337,11 @@ export async function getRefundStats(ch = DC) {
   await ensureSchema();
   const db = getDb();
   const [total, sevenDay, thirtyDay, purchases7d, purchases30d] = await Promise.all([
-    db.execute({ sql: `SELECT COUNT(*) as c, COALESCE(SUM(amount_cents),0) as amt FROM refunds WHERE channel_id = ?`, args: [ch] }),
-    db.execute({ sql: `SELECT COUNT(*) as refunds FROM refunds WHERE channel_id = ? AND refunded_at >= datetime('now', '-7 days')`, args: [ch] }),
-    db.execute({ sql: `SELECT COUNT(*) as refunds FROM refunds WHERE channel_id = ? AND refunded_at >= datetime('now', '-30 days')`, args: [ch] }),
-    db.execute({ sql: `SELECT COUNT(*) as c FROM purchases WHERE channel_id = ? AND purchased_at >= datetime('now', '-7 days')`, args: [ch] }),
-    db.execute({ sql: `SELECT COUNT(*) as c FROM purchases WHERE channel_id = ? AND purchased_at >= datetime('now', '-30 days')`, args: [ch] }),
+    db.execute({ sql: `SELECT COUNT(*) as c, COALESCE(SUM(amount_cents),0) as amt FROM refunds WHERE COALESCE(channel_id, 'default') = ?`, args: [ch] }),
+    db.execute({ sql: `SELECT COUNT(*) as refunds FROM refunds WHERE COALESCE(channel_id, 'default') = ? AND refunded_at >= datetime('now', '-7 days')`, args: [ch] }),
+    db.execute({ sql: `SELECT COUNT(*) as refunds FROM refunds WHERE COALESCE(channel_id, 'default') = ? AND refunded_at >= datetime('now', '-30 days')`, args: [ch] }),
+    db.execute({ sql: `SELECT COUNT(*) as c FROM purchases WHERE COALESCE(channel_id, 'default') = ? AND purchased_at >= datetime('now', '-7 days')`, args: [ch] }),
+    db.execute({ sql: `SELECT COUNT(*) as c FROM purchases WHERE COALESCE(channel_id, 'default') = ? AND purchased_at >= datetime('now', '-30 days')`, args: [ch] }),
   ]);
   const ref7 = Number(sevenDay.rows[0].refunds), pur7 = Number(purchases7d.rows[0].c);
   const ref30 = Number(thirtyDay.rows[0].refunds), pur30 = Number(purchases30d.rows[0].c);
@@ -356,10 +356,10 @@ export async function getVSLStats(days?: number, ch = DC) {
   const df = days ? `AND created_at >= datetime('now', '-${days} days')` : '';
 
   const [visits, uniqueVisits, milestones, ctaClicks] = await Promise.all([
-    db.execute({ sql: `SELECT COUNT(*) as c FROM pageviews WHERE channel_id = ? AND (page = 'vsl' OR page = 'offer') ${df}`, args: [ch] }),
-    db.execute({ sql: `SELECT COUNT(DISTINCT visitor_id) as c FROM pageviews WHERE channel_id = ? AND (page = 'vsl' OR page = 'offer') ${df}`, args: [ch] }),
-    db.execute({ sql: `SELECT event_name, COUNT(DISTINCT visitor_id) as unique_count FROM events WHERE channel_id = ? AND event_name IN ('vsl_watch_25','vsl_watch_50','vsl_watch_75','vsl_complete') ${df} GROUP BY event_name`, args: [ch] }),
-    db.execute({ sql: `SELECT COUNT(DISTINCT visitor_id) as unique_count FROM events WHERE channel_id = ? AND event_name = 'cta_click' ${df}`, args: [ch] }),
+    db.execute({ sql: `SELECT COUNT(*) as c FROM pageviews WHERE COALESCE(channel_id, 'default') = ? AND (page = 'vsl' OR page = 'offer') ${df}`, args: [ch] }),
+    db.execute({ sql: `SELECT COUNT(DISTINCT visitor_id) as c FROM pageviews WHERE COALESCE(channel_id, 'default') = ? AND (page = 'vsl' OR page = 'offer') ${df}`, args: [ch] }),
+    db.execute({ sql: `SELECT event_name, COUNT(DISTINCT visitor_id) as unique_count FROM events WHERE COALESCE(channel_id, 'default') = ? AND event_name IN ('vsl_watch_25','vsl_watch_50','vsl_watch_75','vsl_complete') ${df} GROUP BY event_name`, args: [ch] }),
+    db.execute({ sql: `SELECT COUNT(DISTINCT visitor_id) as unique_count FROM events WHERE COALESCE(channel_id, 'default') = ? AND event_name = 'cta_click' ${df}`, args: [ch] }),
   ]);
 
   const mm: Record<string, number> = {};
@@ -378,8 +378,8 @@ export async function getCheckoutStats(days?: number, ch = DC) {
   const dpf = days ? `AND purchased_at >= datetime('now', '-${days} days')` : '';
 
   const [checkoutStarts, purchases] = await Promise.all([
-    db.execute({ sql: `SELECT COUNT(DISTINCT visitor_id) as c FROM events WHERE channel_id = ? AND event_name = 'checkout_start' ${df}`, args: [ch] }),
-    db.execute({ sql: `SELECT COUNT(*) as c, COALESCE(SUM(amount_cents),0) as rev FROM purchases WHERE channel_id = ? ${dpf ? dpf.replace('AND', 'AND') : ''}`, args: [ch] }),
+    db.execute({ sql: `SELECT COUNT(DISTINCT visitor_id) as c FROM events WHERE COALESCE(channel_id, 'default') = ? AND event_name = 'checkout_start' ${df}`, args: [ch] }),
+    db.execute({ sql: `SELECT COUNT(*) as c, COALESCE(SUM(amount_cents),0) as rev FROM purchases WHERE COALESCE(channel_id, 'default') = ? ${dpf ? dpf.replace('AND', 'AND') : ''}`, args: [ch] }),
   ]);
 
   const refunds = await getRefundStats(ch);
@@ -398,12 +398,12 @@ export async function getFunnelFlow(days?: number, ch = DC) {
   const ef = days ? `AND created_at >= datetime('now', '-${days} days')` : '';
 
   const [pageVisits, uniquePageVisits, subs, vslVisits, ctaClicks, purchases] = await Promise.all([
-    db.execute({ sql: `SELECT COUNT(*) as c FROM pageviews WHERE channel_id = ? ${pf}`, args: [ch] }),
-    db.execute({ sql: `SELECT COUNT(DISTINCT visitor_id) as c FROM pageviews WHERE channel_id = ? ${pf}`, args: [ch] }),
-    db.execute({ sql: `SELECT COUNT(*) as c FROM subscribers WHERE channel_id = ? ${sf}`, args: [ch] }),
-    db.execute({ sql: `SELECT COUNT(DISTINCT visitor_id) as c FROM pageviews WHERE channel_id = ? AND (page = 'vsl' OR page = 'offer') ${pf}`, args: [ch] }),
-    db.execute({ sql: `SELECT COUNT(DISTINCT visitor_id) as c FROM events WHERE channel_id = ? AND event_name = 'cta_click' ${ef}`, args: [ch] }),
-    db.execute({ sql: `SELECT COUNT(*) as c FROM purchases WHERE channel_id = ? ${ppf}`, args: [ch] }),
+    db.execute({ sql: `SELECT COUNT(*) as c FROM pageviews WHERE COALESCE(channel_id, 'default') = ? ${pf}`, args: [ch] }),
+    db.execute({ sql: `SELECT COUNT(DISTINCT visitor_id) as c FROM pageviews WHERE COALESCE(channel_id, 'default') = ? ${pf}`, args: [ch] }),
+    db.execute({ sql: `SELECT COUNT(*) as c FROM subscribers WHERE COALESCE(channel_id, 'default') = ? ${sf}`, args: [ch] }),
+    db.execute({ sql: `SELECT COUNT(DISTINCT visitor_id) as c FROM pageviews WHERE COALESCE(channel_id, 'default') = ? AND (page = 'vsl' OR page = 'offer') ${pf}`, args: [ch] }),
+    db.execute({ sql: `SELECT COUNT(DISTINCT visitor_id) as c FROM events WHERE COALESCE(channel_id, 'default') = ? AND event_name = 'cta_click' ${ef}`, args: [ch] }),
+    db.execute({ sql: `SELECT COUNT(*) as c FROM purchases WHERE COALESCE(channel_id, 'default') = ? ${ppf}`, args: [ch] }),
   ]);
 
   const pv = Number(pageVisits.rows[0].c), upv = Number(uniquePageVisits.rows[0].c);

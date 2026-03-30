@@ -118,13 +118,13 @@ CREATE INDEX IF NOT EXISTS idx_refunds_email ON refunds(email);
 
 // Migration: add channel_id to existing tables that don't have it yet
 const MIGRATIONS = [
-  // These use ALTER TABLE which silently fails if column already exists in SQLite
-  `ALTER TABLE pageviews ADD COLUMN channel_id TEXT NOT NULL DEFAULT 'default'`,
-  `ALTER TABLE events ADD COLUMN channel_id TEXT NOT NULL DEFAULT 'default'`,
-  `ALTER TABLE subscribers ADD COLUMN channel_id TEXT NOT NULL DEFAULT 'default'`,
-  `ALTER TABLE purchases ADD COLUMN channel_id TEXT NOT NULL DEFAULT 'default'`,
-  `ALTER TABLE campaign_costs ADD COLUMN channel_id TEXT NOT NULL DEFAULT 'default'`,
-  `ALTER TABLE refunds ADD COLUMN channel_id TEXT NOT NULL DEFAULT 'default'`,
+  // Add channel_id column to existing tables. Use DEFAULT 'default' without NOT NULL for compat.
+  `ALTER TABLE pageviews ADD COLUMN channel_id TEXT DEFAULT 'default'`,
+  `ALTER TABLE events ADD COLUMN channel_id TEXT DEFAULT 'default'`,
+  `ALTER TABLE subscribers ADD COLUMN channel_id TEXT DEFAULT 'default'`,
+  `ALTER TABLE purchases ADD COLUMN channel_id TEXT DEFAULT 'default'`,
+  `ALTER TABLE campaign_costs ADD COLUMN channel_id TEXT DEFAULT 'default'`,
+  `ALTER TABLE refunds ADD COLUMN channel_id TEXT DEFAULT 'default'`,
 ];
 
 export async function ensureSchema(): Promise<void> {
@@ -146,6 +146,12 @@ export async function ensureSchema(): Promise<void> {
     sql: `INSERT OR IGNORE INTO channels (id, name) VALUES (?, ?)`,
     args: ['default', 'Default Channel'],
   });
+
+  // Backfill NULL channel_id values to 'default'
+  const tables = ['pageviews', 'events', 'subscribers', 'purchases', 'campaign_costs', 'refunds'];
+  for (const table of tables) {
+    try { await db.execute(`UPDATE ${table} SET channel_id = 'default' WHERE channel_id IS NULL`); } catch (_) {}
+  }
 
   initialized = true;
 }

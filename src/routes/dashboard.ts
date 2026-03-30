@@ -38,7 +38,7 @@ router.get('/channels', async (req: Request, res: Response) => {
 
 router.get('/channels/:id', async (req: Request, res: Response) => {
   if (!checkAuth(req, res)) return;
-  try { res.json(await getChannel(req.params.id)); }
+  try { res.json(await getChannel(req.params.id as string)); }
   catch (err) { res.status(500).json({ error: 'Failed' }); }
 });
 
@@ -55,7 +55,7 @@ router.put('/channels', async (req: Request, res: Response) => {
 router.delete('/channels/:id', async (req: Request, res: Response) => {
   if (!checkAuth(req, res)) return;
   try {
-    await deleteChannel(req.params.id);
+    await deleteChannel(req.params.id as string);
     res.json({ ok: true });
   } catch (err) { res.status(400).json({ error: (err as Error).message }); }
 });
