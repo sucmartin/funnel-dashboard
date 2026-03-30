@@ -103,7 +103,7 @@ function qs(s){
   return r;
 }
 async function af(p){const r=await fetch(qs(`${A}${p}`));if(r.status===401){showAuth();throw new Error('auth')}if(!r.ok)throw new Error(r.status);return r.json()}
-async function loadChannels(){try{channelList=await af('/api/dashboard/channels')}catch(e){channelList=[{id:'default',name:'Default Channel'}]}}
+async function loadChannels(){try{channelList=await af('/api/dashboard/channels')}catch(e){channelList=[{id:'default',name:'Default Channel'}];if(e.message==='auth')return}}
 function switchChannel(id){CH=id;localStorage.setItem('ft_channel',id);go(T)}
 function showAuth(){document.getElementById('app').innerHTML=`<div class="af"><h2>FunnelTrack</h2><input type="password" id="si" placeholder="Enter secret" autofocus /><button class="btn btn-p" onclick="doA()">Unlock</button></div>`;document.getElementById('si').addEventListener('keydown',e=>{if(e.key==='Enter')doA()})}
 function doA(){S=document.getElementById('si').value;localStorage.setItem('ds',S);go('overview')}
@@ -674,7 +674,7 @@ async function addCh(){
   pSt();
 }
 async function delCh(id){
-  if(!confirm('Delete channel "'+id+'"? Data will remain but won\\'t be accessible.'))return;
+  if(!confirm('Delete channel "'+id+'"? Data will remain but will not be accessible.'))return;
   await fetch(qs(A+'/api/dashboard/channels/'+id),{method:'DELETE'});
   await loadChannels();
   if(CH===id){CH='default';localStorage.setItem('ft_channel','default')}
