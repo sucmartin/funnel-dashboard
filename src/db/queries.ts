@@ -168,12 +168,19 @@ export async function insertRefund(data: {
 
 // ---- Dashboard queries (all filtered by channel_id) ----
 
+// Helper: days=1 means "today" (since midnight UTC), days>1 means "last N days"
+function dateFilter(col: string, days?: number): string {
+  if (!days) return '';
+  if (days === 1) return `AND ${col} >= date('now')`;
+  return `AND ${col} >= datetime('now', '-${days} days')`;
+}
+
 export async function getDashboardStats(days?: number, ch = DC) {
   await ensureSchema();
   const db = getDb();
-  const dw = days ? `AND created_at >= datetime('now', '-${days} days')` : '';
-  const ds = days ? `AND subscribed_at >= datetime('now', '-${days} days')` : '';
-  const dp = days ? `AND purchased_at >= datetime('now', '-${days} days')` : '';
+  const dw = dateFilter('created_at', days);
+  const ds = dateFilter('subscribed_at', days);
+  const dp = dateFilter('purchased_at', days);
 
   const [pageviews, subscribers, purchases, events] = await Promise.all([
     db.execute({ sql: `SELECT COUNT(*) as count FROM pageviews WHERE COALESCE(channel_id, 'default') = ? ${dw}`, args: [ch] }),
@@ -194,9 +201,9 @@ export async function getDashboardStats(days?: number, ch = DC) {
 export async function getCampaignBreakdown(ch = DC, days?: number) {
   await ensureSchema();
   const db = getDb();
-  const dSub = days ? `AND s.subscribed_at >= datetime('now', '-${days} days')` : '';
-  const dPur = days ? `AND p.purchased_at >= datetime('now', '-${days} days')` : '';
-  const dPv = days ? `AND created_at >= datetime('now', '-${days} days')` : '';
+  const dSub = dateFilter('s.subscribed_at', days);
+  const dPur = dateFilter('p.purchased_at', days);
+  const dPv = dateFilter('created_at', days);
   const result = await db.execute({
     sql: `SELECT campaign, source, MAX(views) as views, MAX(subscribers) as subscribers, MAX(buyers) as buyers, MAX(revenue_cents) as revenue_cents
     FROM (
@@ -243,7 +250,7 @@ export async function getRevenueByDay(days = 30, ch = DC) {
 export async function getCampaignPageviews(ch = DC, days?: number) {
   await ensureSchema();
   const db = getDb();
-  const dw = days ? `AND created_at >= datetime('now', '-${days} days')` : '';
+  const dw = dateFilter('created_at', days);
   const result = await db.execute({ sql: `SELECT COALESCE(NULLIF(utm_campaign, ''), 'direct') as campaign, COUNT(*) as views FROM pageviews WHERE COALESCE(channel_id, 'default') = ? ${dw} GROUP BY campaign ORDER BY views DESC`, args: [ch] });
   return result.rows.map(row => ({ campaign: row.campaign as string, views: Number(row.views) }));
 }
@@ -396,10 +403,10 @@ export async function getCheckoutStats(days?: number, ch = DC) {
 export async function getFunnelFlow(days?: number, ch = DC) {
   await ensureSchema();
   const db = getDb();
-  const pf = days ? `AND created_at >= datetime('now', '-${days} days')` : '';
-  const sf = days ? `AND subscribed_at >= datetime('now', '-${days} days')` : '';
-  const ppf = days ? `AND purchased_at >= datetime('now', '-${days} days')` : '';
-  const ef = days ? `AND created_at >= datetime('now', '-${days} days')` : '';
+  const pf = dateFilter('created_at', days);
+  const sf = dateFilter('subscribed_at', days);
+  const ppf = dateFilter('purchased_at', days);
+  const ef = dateFilter('created_at', days);
 
   const [pageVisits, uniquePageVisits, subs, vslVisits, ctaClicks, purchases] = await Promise.all([
     db.execute({ sql: `SELECT COUNT(*) as c FROM pageviews WHERE COALESCE(channel_id, 'default') = ? ${pf}`, args: [ch] }),
