@@ -191,20 +191,23 @@ export async function getDashboardStats(days?: number, ch = DC) {
   };
 }
 
-export async function getCampaignBreakdown(ch = DC) {
+export async function getCampaignBreakdown(ch = DC, days?: number) {
   await ensureSchema();
   const db = getDb();
+  const dSub = days ? `AND s.subscribed_at >= datetime('now', '-${days} days')` : '';
+  const dPur = days ? `AND p.purchased_at >= datetime('now', '-${days} days')` : '';
+  const dPv = days ? `AND created_at >= datetime('now', '-${days} days')` : '';
   const result = await db.execute({
     sql: `SELECT campaign, source, MAX(views) as views, MAX(subscribers) as subscribers, MAX(buyers) as buyers, MAX(revenue_cents) as revenue_cents
     FROM (
       SELECT COALESCE(s.utm_campaign, 'direct') as campaign, COALESCE(s.utm_source, 'unknown') as source,
         0 as views, COUNT(DISTINCT s.email) as subscribers, COUNT(DISTINCT p.email) as buyers, COALESCE(SUM(p.amount_cents), 0) as revenue_cents
-      FROM subscribers s LEFT JOIN purchases p ON s.email = p.email AND COALESCE(p.channel_id, 'default') = ?
-      WHERE COALESCE(s.channel_id, 'default') = ? GROUP BY s.utm_campaign, s.utm_source
+      FROM subscribers s LEFT JOIN purchases p ON s.email = p.email AND COALESCE(p.channel_id, 'default') = ? ${dPur}
+      WHERE COALESCE(s.channel_id, 'default') = ? ${dSub} GROUP BY s.utm_campaign, s.utm_source
       UNION ALL
       SELECT COALESCE(utm_campaign, 'direct') as campaign, COALESCE(utm_source, 'unknown') as source,
         COUNT(*) as views, 0 as subscribers, 0 as buyers, 0 as revenue_cents
-      FROM pageviews WHERE COALESCE(channel_id, 'default') = ? GROUP BY utm_campaign, utm_source
+      FROM pageviews WHERE COALESCE(channel_id, 'default') = ? ${dPv} GROUP BY utm_campaign, utm_source
     ) GROUP BY campaign, source ORDER BY views DESC, subscribers DESC`,
     args: [ch, ch, ch],
   });
@@ -237,10 +240,11 @@ export async function getRevenueByDay(days = 30, ch = DC) {
   return result.rows.map(row => ({ day: row.day as string, revenue: Number(row.revenue_cents) / 100, count: Number(row.count) }));
 }
 
-export async function getCampaignPageviews(ch = DC) {
+export async function getCampaignPageviews(ch = DC, days?: number) {
   await ensureSchema();
   const db = getDb();
-  const result = await db.execute({ sql: `SELECT COALESCE(NULLIF(utm_campaign, ''), 'direct') as campaign, COUNT(*) as views FROM pageviews WHERE COALESCE(channel_id, 'default') = ? GROUP BY campaign ORDER BY views DESC`, args: [ch] });
+  const dw = days ? `AND created_at >= datetime('now', '-${days} days')` : '';
+  const result = await db.execute({ sql: `SELECT COALESCE(NULLIF(utm_campaign, ''), 'direct') as campaign, COUNT(*) as views FROM pageviews WHERE COALESCE(channel_id, 'default') = ? ${dw} GROUP BY campaign ORDER BY views DESC`, args: [ch] });
   return result.rows.map(row => ({ campaign: row.campaign as string, views: Number(row.views) }));
 }
 

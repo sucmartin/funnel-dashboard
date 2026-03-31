@@ -151,12 +151,13 @@ async function pOv(days){
   if(days!==undefined)ovDays=days;
   document.getElementById('app').innerHTML=sh('<div class="ld">Loading...</div>');
   try{
+    const dp=ovDays>0?'days='+ovDays:'';
     const[s,ch,f,td,ff]=await Promise.all([
-      af('/api/dashboard/stats'+(ovDays>0?'?days='+ovDays:'')),
-      af('/api/dashboard/charts?days='+(ovDays||30)),
-      af('/api/dashboard/funnel'),
+      af('/api/dashboard/stats'+(dp?'?'+dp:'')),
+      af('/api/dashboard/charts?'+(dp||'days=30')),
+      af('/api/dashboard/funnel'+(dp?'?'+dp:'')),
       af('/api/dashboard/today'),
-      af('/api/dashboard/funnel-flow?days='+(ovDays||30)),
+      af('/api/dashboard/funnel-flow?'+(dp||'days=30')),
     ]);
     ovData={s,ch,f,td,ff};
     rOv();

@@ -117,8 +117,9 @@ router.get('/funnel', async (req: Request, res: Response) => {
   if (!checkAuth(req, res)) return;
   try {
     const c = ch(req);
+    const days = req.query.days ? parseInt(req.query.days as string) : undefined;
     const [campaigns, campaignPV, costs, scoring] = await Promise.all([
-      getCampaignBreakdown(c), getCampaignPageviews(c), getCampaignCosts(c), getSubscriberScoring(c),
+      getCampaignBreakdown(c, days), getCampaignPageviews(c, days), getCampaignCosts(c), getSubscriberScoring(c),
     ]);
 
     let channel = null, videos: any[] = [];
