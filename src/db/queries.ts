@@ -168,19 +168,25 @@ export async function insertRefund(data: {
 
 // ---- Dashboard queries (all filtered by channel_id) ----
 
-// Helper: days=1 means "today" (since midnight UTC), days>1 means "last N days"
-function dateFilter(col: string, days?: number): string {
-  if (!days) return '';
-  if (days === 1) return `AND ${col} >= date('now')`;
-  return `AND ${col} >= datetime('now', '-${days} days')`;
+// Date filtering: supports days (preset), or from/to (custom range)
+export type DateRange = { days?: number; from?: string; to?: string };
+
+function dateFilter(col: string, dr?: DateRange): string {
+  if (!dr) return '';
+  if (dr.from && dr.to) return `AND ${col} >= '${dr.from}' AND ${col} < date('${dr.to}', '+1 day')`;
+  if (dr.from) return `AND ${col} >= '${dr.from}'`;
+  if (dr.to) return `AND ${col} < date('${dr.to}', '+1 day')`;
+  if (!dr.days) return '';
+  if (dr.days === 1) return `AND ${col} >= date('now')`;
+  return `AND ${col} >= datetime('now', '-${dr.days} days')`;
 }
 
-export async function getDashboardStats(days?: number, ch = DC) {
+export async function getDashboardStats(dr?: DateRange, ch = DC) {
   await ensureSchema();
   const db = getDb();
-  const dw = dateFilter('created_at', days);
-  const ds = dateFilter('subscribed_at', days);
-  const dp = dateFilter('purchased_at', days);
+  const dw = dateFilter('created_at', dr);
+  const ds = dateFilter('subscribed_at', dr);
+  const dp = dateFilter('purchased_at', dr);
 
   const [pageviews, subscribers, purchases, events] = await Promise.all([
     db.execute({ sql: `SELECT COUNT(*) as count FROM pageviews WHERE COALESCE(channel_id, 'default') = ? ${dw}`, args: [ch] }),
@@ -198,12 +204,12 @@ export async function getDashboardStats(days?: number, ch = DC) {
   };
 }
 
-export async function getCampaignBreakdown(ch = DC, days?: number) {
+export async function getCampaignBreakdown(ch = DC, dr?: DateRange) {
   await ensureSchema();
   const db = getDb();
-  const dSub = dateFilter('s.subscribed_at', days);
-  const dPur = dateFilter('p.purchased_at', days);
-  const dPv = dateFilter('created_at', days);
+  const dSub = dateFilter('s.subscribed_at', dr);
+  const dPur = dateFilter('p.purchased_at', dr);
+  const dPv = dateFilter('created_at', dr);
   const result = await db.execute({
     sql: `SELECT campaign, source, MAX(views) as views, MAX(subscribers) as subscribers, MAX(buyers) as buyers, MAX(revenue_cents) as revenue_cents
     FROM (
@@ -247,10 +253,10 @@ export async function getRevenueByDay(days = 30, ch = DC) {
   return result.rows.map(row => ({ day: row.day as string, revenue: Number(row.revenue_cents) / 100, count: Number(row.count) }));
 }
 
-export async function getCampaignPageviews(ch = DC, days?: number) {
+export async function getCampaignPageviews(ch = DC, dr?: DateRange) {
   await ensureSchema();
   const db = getDb();
-  const dw = dateFilter('created_at', days);
+  const dw = dateFilter('created_at', dr);
   const result = await db.execute({ sql: `SELECT COALESCE(NULLIF(utm_campaign, ''), 'direct') as campaign, COUNT(*) as views FROM pageviews WHERE COALESCE(channel_id, 'default') = ? ${dw} GROUP BY campaign ORDER BY views DESC`, args: [ch] });
   return result.rows.map(row => ({ campaign: row.campaign as string, views: Number(row.views) }));
 }
@@ -400,13 +406,13 @@ export async function getCheckoutStats(days?: number, ch = DC) {
 
 // ---- Full funnel flow ----
 
-export async function getFunnelFlow(days?: number, ch = DC) {
+export async function getFunnelFlow(dr?: DateRange, ch = DC) {
   await ensureSchema();
   const db = getDb();
-  const pf = dateFilter('created_at', days);
-  const sf = dateFilter('subscribed_at', days);
-  const ppf = dateFilter('purchased_at', days);
-  const ef = dateFilter('created_at', days);
+  const pf = dateFilter('created_at', dr);
+  const sf = dateFilter('subscribed_at', dr);
+  const ppf = dateFilter('purchased_at', dr);
+  const ef = dateFilter('created_at', dr);
 
   const [pageVisits, uniquePageVisits, subs, vslVisits, ctaClicks, purchases] = await Promise.all([
     db.execute({ sql: `SELECT COUNT(*) as c FROM pageviews WHERE COALESCE(channel_id, 'default') = ? ${pf}`, args: [ch] }),

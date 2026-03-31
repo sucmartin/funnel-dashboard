@@ -147,11 +147,17 @@ function cp(t,b){navigator.clipboard.writeText(t).then(()=>{const o=b.textConten
 
 // ============ OVERVIEW ============
 let ovDays=30;let ovData=null;let campSort='subscribers';let campDir='desc';
+let ovFrom='';let ovTo='';
+function ovDateParam(){
+  if(ovFrom||ovTo){let p='';if(ovFrom)p+='from='+ovFrom;if(ovTo)p+=(p?'&':'')+'to='+ovTo;return p}
+  if(ovDays>0)return'days='+ovDays;
+  return'';
+}
 async function pOv(days){
-  if(days!==undefined)ovDays=days;
+  if(days!==undefined){ovDays=days;ovFrom='';ovTo=''}
   document.getElementById('app').innerHTML=sh('<div class="ld">Loading...</div>');
   try{
-    const dp=ovDays>0?'days='+ovDays:'';
+    const dp=ovDateParam();
     const[s,ch,f,td,ff]=await Promise.all([
       af('/api/dashboard/stats'+(dp?'?'+dp:'')),
       af('/api/dashboard/charts?'+(dp||'days=30')),
@@ -162,6 +168,12 @@ async function pOv(days){
     ovData={s,ch,f,td,ff};
     rOv();
   }catch(e){if(e.message!=='auth')document.querySelector('.mn').innerHTML=`<div class="er">${e.message}</div>`}
+}
+function applyCustomDate(){
+  const f=document.getElementById('ov_from').value;
+  const t=document.getElementById('ov_to').value;
+  if(!f&&!t){alert('Pick at least one date');return}
+  ovFrom=f;ovTo=t;ovDays=-1;pOv();
 }
 function sortCamp(col){if(campSort===col)campDir=campDir==='desc'?'asc':'desc';else{campSort=col;campDir='desc';}rOv();}
 function rOv(){
@@ -177,13 +189,20 @@ function rOv(){
     return`<tr><td><span class="grade grade-${c.grade}">${c.grade}</span></td><td><span class="tg tg-p">${c.campaign}</span></td><td><span class="tg tg-b">${c.source}</span></td><td>${N(c.pageviews||0)}</td><td>${c.subscribers}</td><td>${c.buyers}</td><td>${$(c.revenue)}</td><td>${$(c.revenuePerSub||0)}</td><td>${roi}</td><td>${c.conversionRate}</td></tr>`
   }).join(''):'<tr><td colspan="10" class="em">No campaign data yet</td></tr>';
 
-  const drBtn=(d,lbl)=>`<button class="${ovDays===d?'active':''}" onclick="pOv(${d})">${lbl}</button>`;
-  const lbl=ovDays===0?'All time':ovDays===1?'Today':ovDays+'d';
+  const drBtn=(d,lbl)=>`<button class="${ovDays===d&&!ovFrom?'active':''}" onclick="pOv(${d})">${lbl}</button>`;
+  const isCustom=ovDays===-1||ovFrom||ovTo;
+  const lbl=isCustom?(ovFrom&&ovTo?ovFrom+' → '+ovTo:ovFrom||ovTo):ovDays===0?'All time':ovDays===1?'Today':ovDays+'d';
 
   document.querySelector('.mn').innerHTML=`
     <div class="ph"><h1>Overview</h1>
-      <div style="display:flex;align-items:center;gap:8px">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
         <div class="dr" style="margin:0">${drBtn(1,'Today')}${drBtn(7,'7d')}${drBtn(30,'30d')}${drBtn(90,'90d')}${drBtn(0,'All')}</div>
+        <div style="display:flex;align-items:center;gap:4px">
+          <input type="date" id="ov_from" value="${ovFrom}" style="padding:4px 6px;border-radius:6px;border:1px solid ${isCustom?'var(--blue)':'var(--bd)'};background:var(--s1);color:var(--t1);font-size:11px;width:120px"/>
+          <span style="color:var(--t3);font-size:11px">to</span>
+          <input type="date" id="ov_to" value="${ovTo}" style="padding:4px 6px;border-radius:6px;border:1px solid ${isCustom?'var(--blue)':'var(--bd)'};background:var(--s1);color:var(--t1);font-size:11px;width:120px"/>
+          <button class="btn ${isCustom?'btn-p':''}" onclick="applyCustomDate()" style="font-size:10px">Apply</button>
+        </div>
         <button class="btn" onclick="pOv()">Refresh</button>
       </div>
     </div>

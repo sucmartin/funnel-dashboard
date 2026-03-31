@@ -7,6 +7,7 @@ import {
   getSubscriberScoring, getWeeklyStats, getDailySummary,
   getVSLStats, getCheckoutStats, getFunnelFlow,
   setSetting, getChannels, getChannel, upsertChannel, deleteChannel,
+  type DateRange,
 } from '../db/queries';
 import { getRecentVideos, getChannelStats, getAllVideos } from '../services/youtube';
 import { getEmailCampaigns, getGroupStats } from '../services/mailerlite-stats';
@@ -26,6 +27,16 @@ function checkAuth(req: Request, res: Response): boolean {
 // Extract channel_id from query param, default to 'default'
 function ch(req: Request): string {
   return (req.query.channel as string) || 'default';
+}
+
+// Parse date range from query: ?days=7, or ?from=2026-03-01&to=2026-03-31
+function dr(req: Request): DateRange | undefined {
+  const from = req.query.from as string;
+  const to = req.query.to as string;
+  if (from || to) return { from, to };
+  const days = req.query.days ? parseInt(req.query.days as string) : undefined;
+  if (days) return { days };
+  return undefined;
 }
 
 // ---- Channel CRUD ----
@@ -65,8 +76,7 @@ router.delete('/channels/:id', async (req: Request, res: Response) => {
 router.get('/stats', async (req: Request, res: Response) => {
   if (!checkAuth(req, res)) return;
   try {
-    const days = req.query.days ? parseInt(req.query.days as string) : undefined;
-    res.json(await getDashboardStats(days, ch(req)));
+    res.json(await getDashboardStats(dr(req), ch(req)));
   } catch (err) { console.error('[Dashboard] Stats error:', err); res.status(500).json({ error: 'Failed' }); }
 });
 
@@ -117,9 +127,9 @@ router.get('/funnel', async (req: Request, res: Response) => {
   if (!checkAuth(req, res)) return;
   try {
     const c = ch(req);
-    const days = req.query.days ? parseInt(req.query.days as string) : undefined;
+    const d = dr(req);
     const [campaigns, campaignPV, costs, scoring] = await Promise.all([
-      getCampaignBreakdown(c, days), getCampaignPageviews(c, days), getCampaignCosts(c), getSubscriberScoring(c),
+      getCampaignBreakdown(c, d), getCampaignPageviews(c, d), getCampaignCosts(c), getSubscriberScoring(c),
     ]);
 
     let channel = null, videos: any[] = [];
@@ -240,7 +250,7 @@ router.get('/checkout-stats', async (req: Request, res: Response) => {
 
 router.get('/funnel-flow', async (req: Request, res: Response) => {
   if (!checkAuth(req, res)) return;
-  try { res.json(await getFunnelFlow(req.query.days ? parseInt(req.query.days as string) : undefined, ch(req))); }
+  try { res.json(await getFunnelFlow(dr(req), ch(req))); }
   catch (err) { console.error('[Dashboard] Funnel flow error:', err); res.status(500).json({ error: 'Failed' }); }
 });
 
