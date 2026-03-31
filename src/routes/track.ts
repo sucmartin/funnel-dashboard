@@ -13,6 +13,7 @@ const pageviewSchema = z.object({
   utm_medium: z.string().optional(),
   referrer: z.string().optional(),
   channel_id: z.string().optional(),
+  email_source: z.string().optional(),
 });
 
 const eventSchema = z.object({

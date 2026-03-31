@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import Stripe from 'stripe';
 import { config } from '../config';
-import { insertPurchase, insertRefund, getSubscriberByEmail } from '../db/queries';
+import { insertPurchase, insertRefund, getSubscriberByEmail, getLatestEmailSource } from '../db/queries';
 
 const router = Router();
 
@@ -98,6 +98,11 @@ router.post('/stripe', async (req: Request, res: Response) => {
       }
 
       const subscriber = await getSubscriberByEmail(email);
+      // Look up which email in the sequence triggered this purchase
+      let emailSource: string | undefined;
+      if (subscriber?.visitor_id) {
+        emailSource = (await getLatestEmailSource(subscriber.visitor_id)) || undefined;
+      }
       await insertPurchase({
         email,
         amount_cents: amount,
@@ -106,8 +111,9 @@ router.post('/stripe', async (req: Request, res: Response) => {
         utm_campaign: subscriber?.utm_campaign || undefined,
         utm_source: subscriber?.utm_source || undefined,
         purchased_at: new Date(session.created * 1000).toISOString(),
+        email_source: emailSource,
       });
-      console.log(`[Stripe] Purchase recorded: ${email} | $${(amount / 100).toFixed(2)} | campaign=${subscriber?.utm_campaign || 'unknown'}`);
+      console.log(`[Stripe] Purchase recorded: ${email} | $${(amount / 100).toFixed(2)} | campaign=${subscriber?.utm_campaign || 'unknown'} | email_source=${emailSource || 'direct'}`);
     }
   }
 

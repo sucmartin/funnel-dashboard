@@ -114,6 +114,7 @@ CREATE INDEX IF NOT EXISTS idx_purchases_email ON purchases(email);
 CREATE INDEX IF NOT EXISTS idx_purchases_channel ON purchases(channel_id);
 CREATE INDEX IF NOT EXISTS idx_campaign_costs_campaign ON campaign_costs(utm_campaign);
 CREATE INDEX IF NOT EXISTS idx_refunds_email ON refunds(email);
+CREATE INDEX IF NOT EXISTS idx_purchases_email_source ON purchases(email_source);
 `;
 
 // Migration: add channel_id to existing tables that don't have it yet
@@ -125,6 +126,9 @@ const MIGRATIONS = [
   `ALTER TABLE purchases ADD COLUMN channel_id TEXT DEFAULT 'default'`,
   `ALTER TABLE campaign_costs ADD COLUMN channel_id TEXT DEFAULT 'default'`,
   `ALTER TABLE refunds ADD COLUMN channel_id TEXT DEFAULT 'default'`,
+  // Email-level purchase attribution
+  `ALTER TABLE pageviews ADD COLUMN email_source TEXT`,
+  `ALTER TABLE purchases ADD COLUMN email_source TEXT`,
 ];
 
 export async function ensureSchema(): Promise<void> {

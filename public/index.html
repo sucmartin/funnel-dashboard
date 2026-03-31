@@ -158,14 +158,16 @@ async function pOv(days){
   document.getElementById('app').innerHTML=sh('<div class="ld">Loading...</div>');
   try{
     const dp=ovDateParam();
-    const[s,ch,f,td,ff]=await Promise.all([
+    const[s,ch,f,td,ff,flowRev,ltv]=await Promise.all([
       af('/api/dashboard/stats'+(dp?'?'+dp:'')),
       af('/api/dashboard/charts?'+(dp||'days=30')),
       af('/api/dashboard/funnel'+(dp?'?'+dp:'')),
       af('/api/dashboard/today'),
       af('/api/dashboard/funnel-flow?'+(dp||'days=30')),
+      af('/api/dashboard/flow-revenue'+(dp?'?'+dp:'')),
+      af('/api/dashboard/ltv'),
     ]);
-    ovData={s,ch,f,td,ff};
+    ovData={s,ch,f,td,ff,flowRev,ltv};
     rOv();
   }catch(e){if(e.message!=='auth')document.querySelector('.mn').innerHTML=`<div class="er">${e.message}</div>`}
 }
@@ -178,7 +180,9 @@ function applyCustomDate(){
 function sortCamp(col){if(campSort===col)campDir=campDir==='desc'?'asc':'desc';else{campSort=col;campDir='desc';}rOv();}
 function rOv(){
   if(!ovData)return;
-  const{s,ch,f,td,ff}=ovData;
+  const{s,ch,f,td,ff,flowRev,ltv}=ovData;
+  const prev=s.previous;
+  function dlt(cur,prv){if(!prv||prv===0)return'';const p=((cur-prv)/prv*100).toFixed(1);const c=p>=0?'var(--green)':'var(--rose)';const a=p>=0?'&#9650;':'&#9660;';return'<div style="font-size:9px;color:'+c+';margin-top:2px">'+a+' '+Math.abs(p)+'%</div>'}
   const or=P(s.totalSubscribers,s.totalPageviews),br=P(s.totalPurchases,s.totalSubscribers);
   const fc=[...(f.campaigns||[])];
   const getVal=(c,k)=>{switch(k){case'campaign':return c.campaign;case'source':return c.source;case'pageviews':return c.pageviews||0;case'subscribers':return c.subscribers;case'buyers':return c.buyers;case'revenue':return c.revenue;case'revenuePerSub':return c.revenuePerSub||0;case'conversionRate':return parseFloat(c.conversionRate)||0;default:return 0}};
@@ -208,10 +212,11 @@ function rOv(){
     </div>
 
     <div class="card" style="padding:0;overflow:hidden;margin-bottom:24px">
-      <div style="display:grid;grid-template-columns:1fr auto 1fr auto 1fr auto 1fr auto 1fr auto 1fr;align-items:center;padding:20px 12px">
+      <div style="display:grid;grid-template-columns:1fr auto 1fr auto 1fr auto 1fr auto 1fr auto 1fr auto 1fr;align-items:center;padding:20px 12px">
         <div style="text-align:center">
           <div style="font-size:28px;font-weight:800;color:var(--blue)">${N(ff.pageVisits)}</div>
           <div style="font-size:9px;color:var(--t3);text-transform:uppercase;margin-top:4px">Views</div>
+          ${prev?dlt(s.totalPageviews,prev.totalPageviews):''}
         </div>
         <div style="text-align:center;padding:0 4px">
           <div style="color:var(--t3);font-size:14px">&rarr;</div>
@@ -220,6 +225,7 @@ function rOv(){
         <div style="text-align:center">
           <div style="font-size:28px;font-weight:800;color:var(--green)">${N(ff.subscribers)}</div>
           <div style="font-size:9px;color:var(--t3);text-transform:uppercase;margin-top:4px">Leads</div>
+          ${prev?dlt(s.totalSubscribers,prev.totalSubscribers):''}
         </div>
         <div style="text-align:center;padding:0 4px">
           <div style="color:var(--t3);font-size:14px">&rarr;</div>
@@ -244,6 +250,7 @@ function rOv(){
         <div style="text-align:center">
           <div style="font-size:28px;font-weight:800;color:var(--rose)">${N(ff.purchases)}</div>
           <div style="font-size:9px;color:var(--t3);text-transform:uppercase;margin-top:4px">Sales</div>
+          ${prev?dlt(s.totalPurchases,prev.totalPurchases):''}
         </div>
         <div style="text-align:center;padding:0 4px">
           <div style="color:var(--t3);font-size:14px">&rarr;</div>
@@ -251,6 +258,14 @@ function rOv(){
         <div style="text-align:center">
           <div style="font-size:28px;font-weight:800;color:var(--amber)">${$(s.totalRevenue)}</div>
           <div style="font-size:9px;color:var(--t3);text-transform:uppercase;margin-top:4px">Revenue</div>
+          ${prev?dlt(s.totalRevenue,prev.totalRevenue):''}
+        </div>
+        <div style="text-align:center;padding:0 4px">
+          <div style="color:var(--t3);font-size:14px">|</div>
+        </div>
+        <div style="text-align:center">
+          <div style="font-size:28px;font-weight:800;color:var(--cyan)">${$(ltv.averageLTV)}</div>
+          <div style="font-size:9px;color:var(--t3);text-transform:uppercase;margin-top:4px">Avg LTV</div>
         </div>
       </div>
     </div>
@@ -263,7 +278,12 @@ function rOv(){
     <div class="tc"><h3>Campaign Performance</h3>
       <table><thead><tr><th></th><th ${srt('campaign')}>Campaign</th><th ${srt('source')}>Source</th><th ${srt('pageviews')}>Views</th><th ${srt('subscribers')}>Subs</th><th ${srt('buyers')}>Sales</th><th ${srt('revenue')}>Revenue</th><th ${srt('revenuePerSub')}>Rev/Sub</th><th>ROI</th><th ${srt('conversionRate')}>Conv.</th></tr></thead>
       <tbody>${cr}</tbody></table>
-    </div>`;
+    </div>
+
+    ${flowRev&&flowRev.length>0?`<div class="tc"><h3>Revenue by Email Flow</h3>
+      <table><thead><tr><th>Flow</th><th>Purchases</th><th>Revenue</th><th>% of Total</th></tr></thead>
+      <tbody>${flowRev.map(f=>`<tr><td><span class="tg tg-c">${f.flow}</span></td><td>${f.purchases}</td><td>${$(f.revenue)}</td><td>${f.pctOfTotal}%</td></tr>`).join('')}</tbody></table>
+    </div>`:''}`;
 }
 
 // ============ YOUTUBE ============
@@ -463,9 +483,15 @@ function rVsl(vs,cs){
 // ============ EMAILS ============
 async function pEm(){
   document.getElementById('app').innerHTML=sh('<div class="ld">Loading email data...</div>');
-  try{const d=await af('/api/dashboard/emails');rEm(d)}catch(e){if(e.message!=='auth')document.querySelector('.mn').innerHTML=`<div class="er">${e.message}</div>`}
+  try{
+    const[d,emailRev]=await Promise.all([
+      af('/api/dashboard/emails'),
+      af('/api/dashboard/email-revenue'),
+    ]);
+    rEm(d,emailRev);
+  }catch(e){if(e.message!=='auth')document.querySelector('.mn').innerHTML=`<div class="er">${e.message}</div>`}
 }
-function rEm(d){
+function rEm(d,emailRev){
   const g=d.group;
   const gs=g?`<div class="grid g4">
     <div class="card st"><div class="lb">List Size</div><div class="vl" style="color:var(--green)">${N(g.activeCount)}</div></div>
@@ -485,7 +511,8 @@ function rEm(d){
     <div style="width:120px">${bar(c.stats.openRate*100,60,'var(--amber)')}</div>
     <div style="width:120px">${bar(c.stats.clickRate*100,20,'var(--cyan)')}</div>
   </div>`).join(''):'<div class="em">No email campaigns sent yet</div>';
-  document.querySelector('.mn').innerHTML=`<div class="ph"><h1>Email Performance</h1><button class="btn" onclick="go('emails')">Refresh</button></div>${gs}<div class="tc"><h3>Campaigns</h3><div style="display:flex;padding:8px 16px 4px;font-size:9px;color:var(--t3);gap:16px;text-transform:uppercase;letter-spacing:.7px"><div style="flex:1">Name</div><div style="width:200px">Stats</div><div style="width:120px">Open Rate</div><div style="width:120px">Click Rate</div></div>${rows}</div>`;
+  const erRows=emailRev&&emailRev.length>0?emailRev.map(e=>`<tr><td><span class="tg tg-p">${e.email}</span></td><td>${e.purchases}</td><td>${$(e.revenue)}</td></tr>`).join(''):'<tr><td colspan="3" class="em">No email-attributed purchases yet. Tag your email CTAs with utm_source=email&amp;utm_campaign=lm-email1</td></tr>';
+  document.querySelector('.mn').innerHTML=`<div class="ph"><h1>Email Performance</h1><button class="btn" onclick="go('emails')">Refresh</button></div>${gs}<div class="tc"><h3>Revenue by Email</h3><table><thead><tr><th>Email Tag</th><th>Purchases</th><th>Revenue</th></tr></thead><tbody>${erRows}</tbody></table></div><div class="tc"><h3>MailerLite Campaigns</h3><div style="display:flex;padding:8px 16px 4px;font-size:9px;color:var(--t3);gap:16px;text-transform:uppercase;letter-spacing:.7px"><div style="flex:1">Name</div><div style="width:200px">Stats</div><div style="width:120px">Open Rate</div><div style="width:120px">Click Rate</div></div>${rows}</div>`;
 }
 
 // ============ SCORING ============

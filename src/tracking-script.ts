@@ -42,6 +42,8 @@ function detectPage(){
 var utms=getUtms();
 var pvData={visitor_id:vid,page:detectPage(),utm_source:utms.utm_source,utm_campaign:utms.utm_campaign,utm_medium:utms.utm_medium,referrer:document.referrer||undefined};
 if(chId)pvData.channel_id=chId;
+if((utms.utm_source==="email"||utms.utm_source==="mailerlite")&&utms.utm_campaign){pvData.email_source=utms.utm_campaign;sessionStorage.setItem("_fv_email_src",utms.utm_campaign)}
+else{var es=sessionStorage.getItem("_fv_email_src");if(es)pvData.email_source=es}
 send("/api/track/pageview",pvData);
 
 var lastOptinEmail="";

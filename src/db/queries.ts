@@ -80,13 +80,13 @@ export async function deleteChannel(id: string) {
 export async function insertPageview(data: {
   page: string; visitor_id: string;
   utm_source?: string; utm_campaign?: string; utm_medium?: string; referrer?: string;
-  channel_id?: string;
+  channel_id?: string; email_source?: string;
 }) {
   await ensureSchema();
   const db = getDb();
   await db.execute({
-    sql: `INSERT INTO pageviews (channel_id, page, visitor_id, utm_source, utm_campaign, utm_medium, referrer) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    args: [data.channel_id || DC, data.page, data.visitor_id, data.utm_source||null, data.utm_campaign||null, data.utm_medium||null, data.referrer||null],
+    sql: `INSERT INTO pageviews (channel_id, page, visitor_id, utm_source, utm_campaign, utm_medium, referrer, email_source) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    args: [data.channel_id || DC, data.page, data.visitor_id, data.utm_source||null, data.utm_campaign||null, data.utm_medium||null, data.referrer||null, data.email_source||null],
   });
 }
 
@@ -137,12 +137,13 @@ export async function getLatestPageviewUtms(visitor_id: string) {
 export async function insertPurchase(data: {
   email: string; amount_cents: number; currency: string; stripe_session_id: string;
   utm_campaign?: string; utm_source?: string; purchased_at: string; channel_id?: string;
+  email_source?: string;
 }) {
   await ensureSchema();
   const db = getDb();
   await db.execute({
-    sql: `INSERT OR IGNORE INTO purchases (channel_id, email, amount_cents, currency, stripe_session_id, utm_campaign, utm_source, purchased_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-    args: [data.channel_id||DC, data.email, data.amount_cents, data.currency, data.stripe_session_id, data.utm_campaign||null, data.utm_source||null, data.purchased_at],
+    sql: `INSERT OR IGNORE INTO purchases (channel_id, email, amount_cents, currency, stripe_session_id, utm_campaign, utm_source, purchased_at, email_source) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    args: [data.channel_id||DC, data.email, data.amount_cents, data.currency, data.stripe_session_id, data.utm_campaign||null, data.utm_source||null, data.purchased_at, data.email_source||null],
   });
 }
 
@@ -152,7 +153,18 @@ export async function getSubscriberByEmail(email: string) {
   const result = await db.execute({ sql: `SELECT * FROM subscribers WHERE email = ? LIMIT 1`, args: [email] });
   if (result.rows.length === 0) return undefined;
   const row = result.rows[0];
-  return { email: row.email as string, utm_source: row.utm_source as string|null, utm_campaign: row.utm_campaign as string|null, channel_id: row.channel_id as string };
+  return { email: row.email as string, visitor_id: row.visitor_id as string|null, utm_source: row.utm_source as string|null, utm_campaign: row.utm_campaign as string|null, channel_id: row.channel_id as string };
+}
+
+export async function getLatestEmailSource(visitor_id: string): Promise<string | null> {
+  await ensureSchema();
+  const db = getDb();
+  const result = await db.execute({
+    sql: `SELECT email_source FROM pageviews WHERE visitor_id = ? AND email_source IS NOT NULL ORDER BY created_at DESC LIMIT 1`,
+    args: [visitor_id],
+  });
+  if (result.rows.length === 0) return null;
+  return result.rows[0].email_source as string;
 }
 
 export async function insertRefund(data: {
@@ -470,4 +482,108 @@ export async function deleteSetting(key: string): Promise<void> {
   await ensureSchema();
   const db = getDb();
   await db.execute({ sql: `DELETE FROM settings WHERE key = ?`, args: [key] });
+}
+
+// ---- Email-level purchase attribution ----
+
+export async function getRevenueByEmail(ch = DC, dr?: DateRange) {
+  await ensureSchema();
+  const db = getDb();
+  const dp = dateFilter('purchased_at', dr);
+  const result = await db.execute({
+    sql: `SELECT COALESCE(email_source, 'direct') as email_tag, COUNT(*) as purchases, SUM(amount_cents) as revenue_cents
+          FROM purchases WHERE COALESCE(channel_id, 'default') = ? ${dp}
+          GROUP BY email_tag ORDER BY revenue_cents DESC`,
+    args: [ch],
+  });
+  return result.rows.map(row => ({
+    email: row.email_tag as string,
+    purchases: Number(row.purchases),
+    revenue: Number(row.revenue_cents) / 100,
+  }));
+}
+
+export async function getRevenueByFlow(ch = DC, dr?: DateRange) {
+  await ensureSchema();
+  const db = getDb();
+  const dp = dateFilter('purchased_at', dr);
+  const result = await db.execute({
+    sql: `SELECT
+          CASE
+            WHEN email_source LIKE 'lm-%' THEN 'Lead Magnet Sequence'
+            WHEN email_source LIKE 'ac-%' THEN 'Abandoned Cart'
+            WHEN email_source LIKE 'buyer-%' THEN 'Buyer Upsells'
+            WHEN email_source LIKE 'nurture-%' THEN 'Nurture Sequence'
+            WHEN email_source LIKE 'broadcast-%' THEN 'Broadcast'
+            WHEN email_source IS NULL THEN 'Direct / No Email'
+            ELSE 'Other'
+          END as flow,
+          COUNT(*) as purchases,
+          SUM(amount_cents) as revenue_cents
+          FROM purchases WHERE COALESCE(channel_id, 'default') = ? ${dp}
+          GROUP BY flow ORDER BY revenue_cents DESC`,
+    args: [ch],
+  });
+  const totalRev = result.rows.reduce((a, r) => a + Number(r.revenue_cents), 0);
+  return result.rows.map(row => ({
+    flow: row.flow as string,
+    purchases: Number(row.purchases),
+    revenue: Number(row.revenue_cents) / 100,
+    pctOfTotal: totalRev > 0 ? +((Number(row.revenue_cents) / totalRev) * 100).toFixed(1) : 0,
+  }));
+}
+
+// ---- Customer LTV ----
+
+export async function getCustomerLTV(ch = DC, limit = 20) {
+  await ensureSchema();
+  const db = getDb();
+  const result = await db.execute({
+    sql: `SELECT p.email, COUNT(*) as purchase_count, SUM(p.amount_cents) as total_cents,
+          MIN(p.purchased_at) as first_purchase, MAX(p.purchased_at) as last_purchase,
+          s.utm_campaign as source_campaign
+          FROM purchases p LEFT JOIN subscribers s ON p.email = s.email
+          WHERE COALESCE(p.channel_id, 'default') = ?
+          GROUP BY p.email ORDER BY total_cents DESC LIMIT ?`,
+    args: [ch, limit],
+  });
+  return result.rows.map(row => ({
+    email: row.email as string,
+    purchases: Number(row.purchase_count),
+    totalRevenue: Number(row.total_cents) / 100,
+    firstPurchase: row.first_purchase as string,
+    lastPurchase: row.last_purchase as string,
+    sourceCampaign: row.source_campaign as string | null,
+  }));
+}
+
+export async function getAverageLTV(ch = DC) {
+  await ensureSchema();
+  const db = getDb();
+  const result = await db.execute({
+    sql: `SELECT COUNT(DISTINCT email) as customers, SUM(amount_cents) as total_cents
+          FROM purchases WHERE COALESCE(channel_id, 'default') = ?`,
+    args: [ch],
+  });
+  const customers = Number(result.rows[0].customers);
+  const total = Number(result.rows[0].total_cents);
+  return { customers, totalRevenue: total / 100, averageLTV: customers > 0 ? total / customers / 100 : 0 };
+}
+
+// ---- Comparison periods ----
+
+export function getPreviousDateRange(dr: DateRange): DateRange | undefined {
+  if (dr.from && dr.to) {
+    const fromDate = new Date(dr.from + 'T00:00:00Z');
+    const toDate = new Date(dr.to + 'T00:00:00Z');
+    const span = toDate.getTime() - fromDate.getTime() + 86400000; // include end day
+    const prevTo = new Date(fromDate.getTime() - 86400000);
+    const prevFrom = new Date(prevTo.getTime() - span + 86400000);
+    return { from: prevFrom.toISOString().split('T')[0], to: prevTo.toISOString().split('T')[0] };
+  }
+  if (dr.days) {
+    if (dr.days === 1) return { days: 1 }; // "today" vs "yesterday" - handled differently
+    return { days: dr.days * 2 }; // hack: we'll subtract current from doubled period
+  }
+  return undefined;
 }

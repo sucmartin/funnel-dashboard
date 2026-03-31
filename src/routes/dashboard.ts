@@ -6,6 +6,7 @@ import {
   addCampaignCost, getCampaignCosts, getCostEntries,
   getSubscriberScoring, getWeeklyStats, getDailySummary,
   getVSLStats, getCheckoutStats, getFunnelFlow,
+  getRevenueByEmail, getRevenueByFlow, getCustomerLTV, getAverageLTV, getPreviousDateRange,
   setSetting, getChannels, getChannel, upsertChannel, deleteChannel,
   type DateRange,
 } from '../db/queries';
@@ -76,7 +77,16 @@ router.delete('/channels/:id', async (req: Request, res: Response) => {
 router.get('/stats', async (req: Request, res: Response) => {
   if (!checkAuth(req, res)) return;
   try {
-    res.json(await getDashboardStats(dr(req), ch(req)));
+    const dateRange = dr(req);
+    const current = await getDashboardStats(dateRange, ch(req));
+    let previous = null;
+    if (dateRange) {
+      const prevDR = getPreviousDateRange(dateRange);
+      if (prevDR) {
+        try { previous = await getDashboardStats(prevDR, ch(req)); } catch (_) {}
+      }
+    }
+    res.json({ ...current, previous });
   } catch (err) { console.error('[Dashboard] Stats error:', err); res.status(500).json({ error: 'Failed' }); }
 });
 
@@ -252,6 +262,29 @@ router.get('/funnel-flow', async (req: Request, res: Response) => {
   if (!checkAuth(req, res)) return;
   try { res.json(await getFunnelFlow(dr(req), ch(req))); }
   catch (err) { console.error('[Dashboard] Funnel flow error:', err); res.status(500).json({ error: 'Failed' }); }
+});
+
+router.get('/email-revenue', async (req: Request, res: Response) => {
+  if (!checkAuth(req, res)) return;
+  try { res.json(await getRevenueByEmail(ch(req), dr(req))); }
+  catch (err) { console.error('[Dashboard] Email revenue error:', err); res.status(500).json({ error: 'Failed' }); }
+});
+
+router.get('/flow-revenue', async (req: Request, res: Response) => {
+  if (!checkAuth(req, res)) return;
+  try { res.json(await getRevenueByFlow(ch(req), dr(req))); }
+  catch (err) { console.error('[Dashboard] Flow revenue error:', err); res.status(500).json({ error: 'Failed' }); }
+});
+
+router.get('/ltv', async (req: Request, res: Response) => {
+  if (!checkAuth(req, res)) return;
+  try {
+    const [customers, avg] = await Promise.all([
+      getCustomerLTV(ch(req), parseInt(req.query.limit as string) || 20),
+      getAverageLTV(ch(req)),
+    ]);
+    res.json({ customers, ...avg });
+  } catch (err) { console.error('[Dashboard] LTV error:', err); res.status(500).json({ error: 'Failed' }); }
 });
 
 router.get('/settings', async (req: Request, res: Response) => {
