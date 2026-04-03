@@ -127,7 +127,6 @@ function sh(c){return`<div class="shell"><div class="sb"><div class="logo">Funne
 ${chPicker()}
 <div class="ni ${T==='overview'?'a':''}" onclick="go('overview')">${I.ov} Overview</div>
 <div class="ni ${T==='youtube'?'a':''}" onclick="go('youtube')">${I.yt} YouTube</div>
-<div class="ni ${T==='vsl'?'a':''}" onclick="go('vsl')">${I.ac} VSL</div>
 <div class="ni ${T==='emails'?'a':''}" onclick="go('emails')">${I.em} Emails</div>
 <div class="ni ${T==='scoring'?'a':''}" onclick="go('scoring')">${I.sc} Quality Score</div>
 <div class="ni ${T==='costs'?'a':''}" onclick="go('costs')">${I.co} Costs & ROI</div>
@@ -215,7 +214,7 @@ function rOv(){
       <div style="display:grid;grid-template-columns:1fr auto 1fr auto 1fr auto 1fr auto 1fr auto 1fr auto 1fr;align-items:center;padding:20px 12px">
         <div style="text-align:center">
           <div style="font-size:28px;font-weight:800;color:var(--blue)">${N(ff.pageVisits)}</div>
-          <div style="font-size:9px;color:var(--t3);text-transform:uppercase;margin-top:4px">Views</div>
+          <div style="font-size:9px;color:var(--t3);text-transform:uppercase;margin-top:4px">Opt-in Views</div>
           ${prev?dlt(s.totalPageviews,prev.totalPageviews):''}
         </div>
         <div style="text-align:center;padding:0 4px">
@@ -229,23 +228,23 @@ function rOv(){
         </div>
         <div style="text-align:center;padding:0 4px">
           <div style="color:var(--t3);font-size:14px">&rarr;</div>
-          <div style="font-size:10px;font-weight:700;color:var(--purple)">${ff.rates.subToVsl}%</div>
+          <div style="font-size:10px;font-weight:700;color:var(--purple)">${ff.rates.subToOffer}%</div>
         </div>
         <div style="text-align:center">
-          <div style="font-size:28px;font-weight:800;color:var(--purple)">${N(ff.vslVisitors)}</div>
-          <div style="font-size:9px;color:var(--t3);text-transform:uppercase;margin-top:4px">VSL</div>
+          <div style="font-size:28px;font-weight:800;color:var(--purple)">${N(ff.offerVisitors)}</div>
+          <div style="font-size:9px;color:var(--t3);text-transform:uppercase;margin-top:4px">Offer Page</div>
         </div>
         <div style="text-align:center;padding:0 4px">
           <div style="color:var(--t3);font-size:14px">&rarr;</div>
-          <div style="font-size:10px;font-weight:700;color:var(--amber)">${ff.rates.vslToCta}%</div>
+          <div style="font-size:10px;font-weight:700;color:var(--amber)">${ff.rates.offerToCheckout}%</div>
         </div>
         <div style="text-align:center">
-          <div style="font-size:28px;font-weight:800;color:var(--amber)">${N(ff.ctaClicks)}</div>
-          <div style="font-size:9px;color:var(--t3);text-transform:uppercase;margin-top:4px">CTA Clicks</div>
+          <div style="font-size:28px;font-weight:800;color:var(--amber)">${N(ff.checkoutStarts)}</div>
+          <div style="font-size:9px;color:var(--t3);text-transform:uppercase;margin-top:4px">Checkouts</div>
         </div>
         <div style="text-align:center;padding:0 4px">
           <div style="color:var(--t3);font-size:14px">&rarr;</div>
-          <div style="font-size:10px;font-weight:700;color:var(--rose)">${ff.rates.ctaToPurchase}%</div>
+          <div style="font-size:10px;font-weight:700;color:${ff.rates.abandonmentRate>50?'var(--rose)':'var(--green)'}">${ff.rates.checkoutToPurchase}%</div>
         </div>
         <div style="text-align:center">
           <div style="font-size:28px;font-weight:800;color:var(--rose)">${N(ff.purchases)}</div>
@@ -256,7 +255,7 @@ function rOv(){
           <div style="color:var(--t3);font-size:14px">&rarr;</div>
         </div>
         <div style="text-align:center">
-          <div style="font-size:28px;font-weight:800;color:var(--amber)">${$(s.totalRevenue)}</div>
+          <div style="font-size:28px;font-weight:800;color:var(--amber)">${$(ff.revenue)}</div>
           <div style="font-size:9px;color:var(--t3);text-transform:uppercase;margin-top:4px">Revenue</div>
           ${prev?dlt(s.totalRevenue,prev.totalRevenue):''}
         </div>
@@ -268,6 +267,7 @@ function rOv(){
           <div style="font-size:9px;color:var(--t3);text-transform:uppercase;margin-top:4px">Avg LTV</div>
         </div>
       </div>
+      ${ff.abandoned>0?'<div style="padding:8px 16px;border-top:1px solid var(--bd);font-size:11px;color:var(--rose);text-align:center"><b>'+ff.abandoned+' abandoned checkouts</b> ('+ff.rates.abandonmentRate+'% abandonment rate)</div>':''}
     </div>
 
     <div class="grid g2" style="margin-bottom:24px">

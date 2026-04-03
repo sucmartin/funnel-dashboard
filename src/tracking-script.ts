@@ -33,9 +33,9 @@ function detectPage(){
   if(attr)return attr;
   var p=window.location.pathname.toLowerCase();
   if(p.includes("optin")||p.includes("opt-in")||p==="/")return"optin";
-  if(p.includes("vsl")||p.includes("sales")||p.includes("video")||p.includes("offer"))return"vsl";
+  if(p.includes("offer")||p.includes("sales")||p.includes("vsl"))return"offer";
   if(p.includes("checkout")||p.includes("payment"))return"checkout";
-  if(p.includes("thank"))return"thank_you";
+  if(p.includes("thank")||p.includes("confirmed"))return"thank_you";
   return p.replace(/^\\//, "")||"unknown";
 }
 

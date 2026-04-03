@@ -426,26 +426,31 @@ export async function getFunnelFlow(dr?: DateRange, ch = DC) {
   const ppf = dateFilter('purchased_at', dr);
   const ef = dateFilter('created_at', dr);
 
-  const [pageVisits, uniquePageVisits, subs, vslVisits, ctaClicks, purchases] = await Promise.all([
-    db.execute({ sql: `SELECT COUNT(*) as c FROM pageviews WHERE COALESCE(channel_id, 'default') = ? ${pf}`, args: [ch] }),
-    db.execute({ sql: `SELECT COUNT(DISTINCT visitor_id) as c FROM pageviews WHERE COALESCE(channel_id, 'default') = ? ${pf}`, args: [ch] }),
+  const [pageVisits, uniquePageVisits, subs, offerVisitors, checkoutStarts, purchases, revenue] = await Promise.all([
+    db.execute({ sql: `SELECT COUNT(*) as c FROM pageviews WHERE COALESCE(channel_id, 'default') = ? AND page = 'optin' ${pf}`, args: [ch] }),
+    db.execute({ sql: `SELECT COUNT(DISTINCT visitor_id) as c FROM pageviews WHERE COALESCE(channel_id, 'default') = ? AND page = 'optin' ${pf}`, args: [ch] }),
     db.execute({ sql: `SELECT COUNT(*) as c FROM subscribers WHERE COALESCE(channel_id, 'default') = ? ${sf}`, args: [ch] }),
-    db.execute({ sql: `SELECT COUNT(DISTINCT visitor_id) as c FROM pageviews WHERE COALESCE(channel_id, 'default') = ? AND (page = 'vsl' OR page = 'offer') ${pf}`, args: [ch] }),
-    db.execute({ sql: `SELECT COUNT(DISTINCT visitor_id) as c FROM events WHERE COALESCE(channel_id, 'default') = ? AND event_name = 'cta_click' ${ef}`, args: [ch] }),
+    db.execute({ sql: `SELECT COUNT(DISTINCT visitor_id) as c FROM pageviews WHERE COALESCE(channel_id, 'default') = ? AND page IN ('vsl', 'offer') ${pf}`, args: [ch] }),
+    db.execute({ sql: `SELECT COUNT(*) as c FROM events WHERE COALESCE(channel_id, 'default') = ? AND event_name = 'checkout_start' ${ef}`, args: [ch] }),
     db.execute({ sql: `SELECT COUNT(*) as c FROM purchases WHERE COALESCE(channel_id, 'default') = ? ${ppf}`, args: [ch] }),
+    db.execute({ sql: `SELECT COALESCE(SUM(amount_cents), 0) as rev FROM purchases WHERE COALESCE(channel_id, 'default') = ? ${ppf}`, args: [ch] }),
   ]);
 
   const pv = Number(pageVisits.rows[0].c), upv = Number(uniquePageVisits.rows[0].c);
-  const sub = Number(subs.rows[0].c), vsl = Number(vslVisits.rows[0].c);
-  const cta = Number(ctaClicks.rows[0].c), pur = Number(purchases.rows[0].c);
+  const sub = Number(subs.rows[0].c), offer = Number(offerVisitors.rows[0].c);
+  const cks = Number(checkoutStarts.rows[0].c), pur = Number(purchases.rows[0].c);
+  const rev = Number(revenue.rows[0].rev) / 100;
 
   return {
-    pageVisits: pv, uniqueVisitors: upv, subscribers: sub, vslVisitors: vsl, ctaClicks: cta, purchases: pur,
+    pageVisits: pv, uniqueVisitors: upv, subscribers: sub, offerVisitors: offer,
+    checkoutStarts: cks, purchases: pur, revenue: rev,
+    abandoned: cks - pur,
     rates: {
       visitToSub: pv > 0 ? +((sub / pv) * 100).toFixed(1) : 0,
-      subToVsl: sub > 0 ? +((vsl / sub) * 100).toFixed(1) : 0,
-      vslToCta: vsl > 0 ? +((cta / vsl) * 100).toFixed(1) : 0,
-      ctaToPurchase: cta > 0 ? +((pur / cta) * 100).toFixed(1) : 0,
+      subToOffer: sub > 0 ? +((offer / sub) * 100).toFixed(1) : 0,
+      offerToCheckout: offer > 0 ? +((cks / offer) * 100).toFixed(1) : 0,
+      checkoutToPurchase: cks > 0 ? +((pur / cks) * 100).toFixed(1) : 0,
+      abandonmentRate: cks > 0 ? +(((cks - pur) / cks) * 100).toFixed(1) : 0,
       overallConversion: pv > 0 ? +((pur / pv) * 100).toFixed(2) : 0,
     },
   };
