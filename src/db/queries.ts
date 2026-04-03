@@ -201,7 +201,7 @@ export async function getDashboardStats(dr?: DateRange, ch = DC) {
   const dp = dateFilter('purchased_at', dr);
 
   const [pageviews, subscribers, purchases, events] = await Promise.all([
-    db.execute({ sql: `SELECT COUNT(*) as count FROM pageviews WHERE COALESCE(channel_id, 'default') = ? ${dw}`, args: [ch] }),
+    db.execute({ sql: `SELECT COUNT(DISTINCT visitor_id) as count FROM pageviews WHERE COALESCE(channel_id, 'default') = ? AND page = 'optin' ${dw}`, args: [ch] }),
     db.execute({ sql: `SELECT COUNT(*) as count FROM subscribers WHERE COALESCE(channel_id, 'default') = ? ${ds}`, args: [ch] }),
     db.execute({ sql: `SELECT COUNT(*) as count, COALESCE(SUM(amount_cents), 0) as revenue FROM purchases WHERE COALESCE(channel_id, 'default') = ? ${dp}`, args: [ch] }),
     db.execute({ sql: `SELECT COUNT(*) as count FROM events WHERE COALESCE(channel_id, 'default') = ? ${dw}`, args: [ch] }),
@@ -219,29 +219,37 @@ export async function getDashboardStats(dr?: DateRange, ch = DC) {
 export async function getCampaignBreakdown(ch = DC, dr?: DateRange) {
   await ensureSchema();
   const db = getDb();
-  const dSub = dateFilter('s.subscribed_at', dr);
-  const dPur = dateFilter('p.purchased_at', dr);
   const dPv = dateFilter('created_at', dr);
-  const result = await db.execute({
-    sql: `SELECT campaign, source, MAX(views) as views, MAX(subscribers) as subscribers, MAX(buyers) as buyers, MAX(revenue_cents) as revenue_cents
-    FROM (
-      SELECT COALESCE(s.utm_campaign, 'direct') as campaign, COALESCE(s.utm_source, 'unknown') as source,
-        0 as views, COUNT(DISTINCT s.email) as subscribers, COUNT(DISTINCT p.email) as buyers, COALESCE(SUM(p.amount_cents), 0) as revenue_cents
-      FROM subscribers s LEFT JOIN purchases p ON s.email = p.email AND COALESCE(p.channel_id, 'default') = ? ${dPur}
-      WHERE COALESCE(s.channel_id, 'default') = ? ${dSub} GROUP BY s.utm_campaign, s.utm_source
-      UNION ALL
-      SELECT COALESCE(utm_campaign, 'direct') as campaign, COALESCE(utm_source, 'unknown') as source,
-        COUNT(*) as views, 0 as subscribers, 0 as buyers, 0 as revenue_cents
-      FROM pageviews WHERE COALESCE(channel_id, 'default') = ? ${dPv} GROUP BY utm_campaign, utm_source
-    ) GROUP BY campaign, source ORDER BY views DESC, subscribers DESC`,
-    args: [ch, ch, ch],
-  });
-  return result.rows.map(row => ({
-    campaign: row.campaign as string, source: row.source as string,
-    subscribers: Number(row.subscribers), buyers: Number(row.buyers),
-    revenue: Number(row.revenue_cents) / 100,
-    conversionRate: Number(row.subscribers) > 0 ? ((Number(row.buyers) / Number(row.subscribers)) * 100).toFixed(1) + '%' : '0%',
-  }));
+  const dSub = dateFilter('subscribed_at', dr);
+  const dPur = dateFilter('purchased_at', dr);
+
+  // Two clean queries instead of UNION+MAX
+  const [pvResult, subResult] = await Promise.all([
+    db.execute({ sql: `SELECT COALESCE(NULLIF(utm_campaign,''), 'direct') as campaign, COALESCE(NULLIF(utm_source,''), 'unknown') as source, COUNT(DISTINCT visitor_id) as views FROM pageviews WHERE COALESCE(channel_id, 'default') = ? ${dPv} GROUP BY campaign, source`, args: [ch] }),
+    db.execute({ sql: `SELECT COALESCE(NULLIF(s.utm_campaign,''), 'direct') as campaign, COALESCE(NULLIF(s.utm_source,''), 'unknown') as source, COUNT(DISTINCT s.email) as subscribers, COUNT(DISTINCT p.email) as buyers, COALESCE(SUM(p.amount_cents), 0) as revenue_cents FROM subscribers s LEFT JOIN purchases p ON s.email = p.email ${dPur ? 'AND p.purchased_at IS NOT NULL ' + dPur : ''} WHERE COALESCE(s.channel_id, 'default') = ? ${dSub} GROUP BY campaign, source`, args: [ch] }),
+  ]);
+
+  // Merge by campaign+source key
+  const map = new Map<string, any>();
+  for (const row of pvResult.rows) {
+    const key = `${row.campaign}|${row.source}`;
+    map.set(key, { campaign: row.campaign as string, source: row.source as string, views: Number(row.views), subscribers: 0, buyers: 0, revenue: 0 });
+  }
+  for (const row of subResult.rows) {
+    const key = `${row.campaign}|${row.source}`;
+    const existing = map.get(key) || { campaign: row.campaign as string, source: row.source as string, views: 0 };
+    existing.subscribers = Number(row.subscribers);
+    existing.buyers = Number(row.buyers);
+    existing.revenue = Number(row.revenue_cents) / 100;
+    map.set(key, existing);
+  }
+
+  return Array.from(map.values())
+    .sort((a, b) => (b.views + b.subscribers) - (a.views + a.subscribers))
+    .map(c => ({
+      ...c,
+      conversionRate: c.subscribers > 0 ? ((c.buyers / c.subscribers) * 100).toFixed(1) + '%' : '0%',
+    }));
 }
 
 export async function getRecentActivity(limit = 20, ch = DC) {
@@ -269,14 +277,14 @@ export async function getCampaignPageviews(ch = DC, dr?: DateRange) {
   await ensureSchema();
   const db = getDb();
   const dw = dateFilter('created_at', dr);
-  const result = await db.execute({ sql: `SELECT COALESCE(NULLIF(utm_campaign, ''), 'direct') as campaign, COUNT(*) as views FROM pageviews WHERE COALESCE(channel_id, 'default') = ? ${dw} GROUP BY campaign ORDER BY views DESC`, args: [ch] });
+  const result = await db.execute({ sql: `SELECT COALESCE(NULLIF(utm_campaign, ''), 'direct') as campaign, COUNT(DISTINCT visitor_id) as views FROM pageviews WHERE COALESCE(channel_id, 'default') = ? ${dw} GROUP BY campaign ORDER BY views DESC`, args: [ch] });
   return result.rows.map(row => ({ campaign: row.campaign as string, views: Number(row.views) }));
 }
 
 export async function getPageviewsByDay(days = 30, ch = DC) {
   await ensureSchema();
   const db = getDb();
-  const result = await db.execute({ sql: `SELECT DATE(created_at) as day, COUNT(*) as views FROM pageviews WHERE COALESCE(channel_id, 'default') = ? AND created_at >= datetime('now', ? || ' days') GROUP BY DATE(created_at) ORDER BY day ASC`, args: [ch, `-${days}`] });
+  const result = await db.execute({ sql: `SELECT DATE(created_at) as day, COUNT(DISTINCT visitor_id) as views FROM pageviews WHERE COALESCE(channel_id, 'default') = ? AND created_at >= datetime('now', ? || ' days') GROUP BY DATE(created_at) ORDER BY day ASC`, args: [ch, `-${days}`] });
   return result.rows.map(row => ({ day: row.day as string, views: Number(row.views) }));
 }
 
@@ -426,25 +434,24 @@ export async function getFunnelFlow(dr?: DateRange, ch = DC) {
   const ppf = dateFilter('purchased_at', dr);
   const ef = dateFilter('created_at', dr);
 
-  const [pageVisits, uniquePageVisits, subs, offerVisitors, checkoutStarts, purchases, revenue] = await Promise.all([
-    db.execute({ sql: `SELECT COUNT(*) as c FROM pageviews WHERE COALESCE(channel_id, 'default') = ? AND page = 'optin' ${pf}`, args: [ch] }),
+  const [uniqueOptinVisitors, subs, offerVisitors, buyClicks, purchases, revenue] = await Promise.all([
     db.execute({ sql: `SELECT COUNT(DISTINCT visitor_id) as c FROM pageviews WHERE COALESCE(channel_id, 'default') = ? AND page = 'optin' ${pf}`, args: [ch] }),
     db.execute({ sql: `SELECT COUNT(*) as c FROM subscribers WHERE COALESCE(channel_id, 'default') = ? ${sf}`, args: [ch] }),
-    db.execute({ sql: `SELECT COUNT(DISTINCT visitor_id) as c FROM pageviews WHERE COALESCE(channel_id, 'default') = ? AND page IN ('vsl', 'offer') ${pf}`, args: [ch] }),
-    db.execute({ sql: `SELECT COUNT(*) as c FROM events WHERE COALESCE(channel_id, 'default') = ? AND event_name = 'checkout_start' ${ef}`, args: [ch] }),
+    db.execute({ sql: `SELECT COUNT(DISTINCT visitor_id) as c FROM pageviews WHERE COALESCE(channel_id, 'default') = ? AND page = 'offer' ${pf}`, args: [ch] }),
+    db.execute({ sql: `SELECT COUNT(DISTINCT visitor_id) as c FROM events WHERE COALESCE(channel_id, 'default') = ? AND event_name IN ('cta_click', 'checkout_start') ${ef}`, args: [ch] }),
     db.execute({ sql: `SELECT COUNT(*) as c FROM purchases WHERE COALESCE(channel_id, 'default') = ? ${ppf}`, args: [ch] }),
     db.execute({ sql: `SELECT COALESCE(SUM(amount_cents), 0) as rev FROM purchases WHERE COALESCE(channel_id, 'default') = ? ${ppf}`, args: [ch] }),
   ]);
 
-  const pv = Number(pageVisits.rows[0].c), upv = Number(uniquePageVisits.rows[0].c);
+  const pv = Number(uniqueOptinVisitors.rows[0].c);
   const sub = Number(subs.rows[0].c), offer = Number(offerVisitors.rows[0].c);
-  const cks = Number(checkoutStarts.rows[0].c), pur = Number(purchases.rows[0].c);
+  const cks = Number(buyClicks.rows[0].c), pur = Number(purchases.rows[0].c);
   const rev = Number(revenue.rows[0].rev) / 100;
 
   return {
-    pageVisits: pv, uniqueVisitors: upv, subscribers: sub, offerVisitors: offer,
-    checkoutStarts: cks, purchases: pur, revenue: rev,
-    abandoned: cks - pur,
+    pageVisits: pv, subscribers: sub, offerVisitors: offer,
+    buyClicks: cks, purchases: pur, revenue: rev,
+    abandoned: Math.max(cks - pur, 0),
     rates: {
       visitToSub: pv > 0 ? +((sub / pv) * 100).toFixed(1) : 0,
       subToOffer: sub > 0 ? +((offer / sub) * 100).toFixed(1) : 0,

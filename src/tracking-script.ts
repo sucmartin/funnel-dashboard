@@ -98,8 +98,7 @@ if(pg==="vsl"||pg==="offer"||window.location.pathname.includes("offer")){
   if(document.readyState==="loading"){document.addEventListener("DOMContentLoaded",autoVSL)}else{setTimeout(autoVSL,500)}
 }
 
-/* Auto-fire checkout_start on checkout pages */
-if(pg==="checkout"){track("checkout_start")}
+/* checkout_start removed — checkout happens on Stripe's domain, not our site */
 
 window.FunnelTracker={track:track,trackOptinSubmit:trackOptin,trackVideoProgress:trackVideoProgress,trackCTAClick:trackCTAClick,getVisitorId:function(){return vid},getUtms:getUtms};
 console.log("[FunnelTracker] Initialized | visitor="+vid+" | page="+detectPage()+" | utms="+JSON.stringify(utms));

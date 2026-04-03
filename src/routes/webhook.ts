@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import Stripe from 'stripe';
 import { config } from '../config';
-import { insertPurchase, insertRefund, getSubscriberByEmail, getLatestEmailSource } from '../db/queries';
+import { insertPurchase, insertRefund, getSubscriberByEmail, getLatestEmailSource, getLatestPageviewUtms } from '../db/queries';
 
 const router = Router();
 
@@ -97,23 +97,37 @@ router.post('/stripe', async (req: Request, res: Response) => {
         return;
       }
 
+      // Attribution: try multiple methods to identify the visitor
       const subscriber = await getSubscriberByEmail(email);
+      const clientRefId = (session as any).client_reference_id as string | null; // visitor_id passed from Lovable checkout
+      const visitorId = clientRefId || subscriber?.visitor_id || null;
+
+      // Look up UTMs from visitor's pageviews (works even if Stripe email ≠ opt-in email)
+      let utmCampaign = subscriber?.utm_campaign || undefined;
+      let utmSource = subscriber?.utm_source || undefined;
+      if (!utmCampaign && visitorId) {
+        const utms = await getLatestPageviewUtms(visitorId);
+        utmCampaign = utms?.utm_campaign || undefined;
+        utmSource = utms?.utm_source || undefined;
+      }
+
       // Look up which email in the sequence triggered this purchase
       let emailSource: string | undefined;
-      if (subscriber?.visitor_id) {
-        emailSource = (await getLatestEmailSource(subscriber.visitor_id)) || undefined;
+      if (visitorId) {
+        emailSource = (await getLatestEmailSource(visitorId)) || undefined;
       }
+
       await insertPurchase({
         email,
         amount_cents: amount,
         currency,
         stripe_session_id: session.id,
-        utm_campaign: subscriber?.utm_campaign || undefined,
-        utm_source: subscriber?.utm_source || undefined,
+        utm_campaign: utmCampaign,
+        utm_source: utmSource,
         purchased_at: new Date(session.created * 1000).toISOString(),
         email_source: emailSource,
       });
-      console.log(`[Stripe] Purchase recorded: ${email} | $${(amount / 100).toFixed(2)} | campaign=${subscriber?.utm_campaign || 'unknown'} | email_source=${emailSource || 'direct'}`);
+      console.log(`[Stripe] Purchase recorded: ${email} | $${(amount / 100).toFixed(2)} | campaign=${utmCampaign || 'unknown'} | visitor=${visitorId || 'none'} | email_source=${emailSource || 'direct'}`);
     }
   }
 

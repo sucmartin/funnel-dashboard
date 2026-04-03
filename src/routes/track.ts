@@ -5,6 +5,28 @@ import { addSubscriberToMailerLite } from '../services/mailerlite';
 
 const router = Router();
 
+// Bot filtering
+const BOT_PATTERNS = /bot|crawl|spider|slurp|facebook|whatsapp|telegram|discord|preview|fetch|curl|wget|python|java|ruby|go-http|node-fetch|axios|headless|phantom|selenium|playwright|puppeteer/i;
+function isBot(req: Request): boolean {
+  const ua = req.headers['user-agent'] || '';
+  if (!ua || ua.length < 10) return true; // No UA or suspiciously short
+  if (BOT_PATTERNS.test(ua)) return true;
+  return false;
+}
+
+// Simple rate limiting (in-memory, resets on cold start — good enough for serverless)
+const rateLimits = new Map<string, { count: number; reset: number }>();
+function isRateLimited(visitorId: string): boolean {
+  const now = Date.now();
+  const entry = rateLimits.get(visitorId);
+  if (!entry || now > entry.reset) {
+    rateLimits.set(visitorId, { count: 1, reset: now + 3600000 }); // 1 hour window
+    return false;
+  }
+  entry.count++;
+  return entry.count > 100; // Max 100 events per hour per visitor
+}
+
 const pageviewSchema = z.object({
   visitor_id: z.string().min(1),
   page: z.string().min(1),
@@ -26,11 +48,13 @@ const eventSchema = z.object({
 
 // POST /api/track/pageview
 router.post('/pageview', async (req: Request, res: Response) => {
+  if (isBot(req)) { res.status(204).send(); return; }
   const parsed = pageviewSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.flatten() });
     return;
   }
+  if (isRateLimited(parsed.data.visitor_id)) { res.status(204).send(); return; }
 
   try {
     await insertPageview(parsed.data);
@@ -44,6 +68,7 @@ router.post('/pageview', async (req: Request, res: Response) => {
 
 // POST /api/track/event
 router.post('/event', async (req: Request, res: Response) => {
+  if (isBot(req)) { res.status(204).send(); return; }
   const parsed = eventSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.flatten() });
