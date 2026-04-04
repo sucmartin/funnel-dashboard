@@ -2,11 +2,12 @@ import { config } from '../config';
 
 const ML_API = 'https://connect.mailerlite.com/api';
 
-async function mlFetch(endpoint: string) {
-  if (!config.mailerlite.apiKey) throw new Error('MailerLite API key not configured');
+async function mlFetch(endpoint: string, apiKey?: string) {
+  const key = apiKey || config.mailerlite.apiKey;
+  if (!key) throw new Error('MailerLite API key not configured');
   const res = await fetch(`${ML_API}/${endpoint}`, {
     headers: {
-      'Authorization': `Bearer ${config.mailerlite.apiKey}`,
+      'Authorization': `Bearer ${key}`,
       'Content-Type': 'application/json',
     },
   });
@@ -33,8 +34,8 @@ export interface EmailCampaignStats {
   };
 }
 
-export async function getEmailCampaigns(limit = 20): Promise<EmailCampaignStats[]> {
-  const data = await mlFetch(`campaigns?filter[status]=sent&limit=${limit}&sort=-created_at`);
+export async function getEmailCampaigns(limit = 20, apiKey?: string): Promise<EmailCampaignStats[]> {
+  const data = await mlFetch(`campaigns?filter[status]=sent&limit=${limit}&sort=-created_at`, apiKey) as any;
   return (data.data || []).map((c: any) => ({
     id: c.id,
     name: c.name,
@@ -52,27 +53,11 @@ export async function getEmailCampaigns(limit = 20): Promise<EmailCampaignStats[
   }));
 }
 
-export interface SubscriberOverview {
-  total: number;
-  active: number;
-  unsubscribed: number;
-  unconfirmed: number;
-}
-
-export async function getSubscriberOverview(): Promise<SubscriberOverview> {
-  const data = await mlFetch('subscribers?limit=0');
-  return {
-    total: data.total || 0,
-    active: data.total || 0,
-    unsubscribed: 0,
-    unconfirmed: 0,
-  };
-}
-
-export async function getGroupStats() {
-  if (!config.mailerlite.groupId) return null;
+export async function getGroupStats(groupId?: string, apiKey?: string) {
+  const gid = groupId || config.mailerlite.groupId;
+  if (!gid) return null;
   try {
-    const data = await mlFetch(`groups/${config.mailerlite.groupId}`);
+    const data = await mlFetch(`groups/${gid}`, apiKey) as any;
     return {
       id: data.data?.id,
       name: data.data?.name,

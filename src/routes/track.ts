@@ -97,7 +97,7 @@ router.post('/event', async (req: Request, res: Response) => {
       await upsertSubscriber({ email, visitor_id, utm_source, utm_campaign, utm_medium, channel_id: parsed.data.channel_id });
 
       // Fire-and-forget MailerLite call (don't block response)
-      addSubscriberToMailerLite({ email, utm_campaign, utm_source }).catch(err => {
+      addSubscriberToMailerLite({ email, utm_campaign, utm_source, channel_id: parsed.data.channel_id }).catch(err => {
         console.error('[Track] MailerLite background error:', err);
       });
     }

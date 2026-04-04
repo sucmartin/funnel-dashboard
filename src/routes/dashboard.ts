@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { config, getConfigForDisplay, reloadConfigFromDB } from '../config';
+import { config, getConfigForDisplay, reloadConfigFromDB, getChannelConfig } from '../config';
 import {
   getDashboardStats, getCampaignBreakdown, getRecentActivity,
   getPageviewsByDay, getSubscribersByDay, getRevenueByDay, getCampaignPageviews,
@@ -58,8 +58,14 @@ router.put('/channels', async (req: Request, res: Response) => {
   if (!checkAuth(req, res)) return;
   try {
     const { id, name, ...rest } = req.body;
-    if (!id || !name) { res.status(400).json({ error: 'id and name required' }); return; }
-    await upsertChannel({ id, name, ...rest });
+    if (!id) { res.status(400).json({ error: 'id required' }); return; }
+    // For partial updates, fetch existing name if not provided
+    let channelName = name;
+    if (!channelName) {
+      const existing = await getChannel(id);
+      channelName = existing?.name || id;
+    }
+    await upsertChannel({ id, name: channelName, ...rest });
     res.json({ ok: true });
   } catch (err) { console.error('[Dashboard] Channel save error:', err); res.status(500).json({ error: 'Failed' }); }
 });
@@ -144,8 +150,12 @@ router.get('/funnel', async (req: Request, res: Response) => {
 
     let channel = null, videos: any[] = [];
     try {
-      if (config.youtube.apiKey && config.youtube.channelId) {
-        [channel, videos] = await Promise.all([getChannelStats(), getRecentVideos(30)]);
+      const cfg = await getChannelConfig(c);
+      if (cfg.youtubeApiKey && cfg.youtubeChannelId) {
+        [channel, videos] = await Promise.all([
+          getChannelStats(cfg.youtubeApiKey, cfg.youtubeChannelId),
+          getRecentVideos(30, cfg.youtubeApiKey, cfg.youtubeChannelId),
+        ]);
       }
     } catch (ytErr) { console.warn('[Dashboard] YouTube fetch failed in funnel, skipping:', ytErr); }
 
@@ -167,11 +177,14 @@ router.get('/funnel', async (req: Request, res: Response) => {
 // GET /api/dashboard/youtube — enriched with funnel data per video
 router.get('/youtube', async (req: Request, res: Response) => {
   if (!checkAuth(req, res)) return;
-  if (!config.youtube.apiKey || !config.youtube.channelId) { res.json({ channel: null, videos: [] }); return; }
   try {
     const c = ch(req);
+    const cfg = await getChannelConfig(c);
+    if (!cfg.youtubeApiKey || !cfg.youtubeChannelId) { res.json({ channel: null, videos: [] }); return; }
     const [channel, videos, campaigns, campaignPV] = await Promise.all([
-      getChannelStats(), getAllVideos(500), getCampaignBreakdown(c), getCampaignPageviews(c),
+      getChannelStats(cfg.youtubeApiKey, cfg.youtubeChannelId),
+      getAllVideos(500, cfg.youtubeApiKey, cfg.youtubeChannelId),
+      getCampaignBreakdown(c), getCampaignPageviews(c),
     ]);
 
     const campMap = new Map(campaigns.map(c => [c.campaign, c]));
@@ -213,7 +226,11 @@ router.get('/youtube', async (req: Request, res: Response) => {
 router.get('/emails', async (req: Request, res: Response) => {
   if (!checkAuth(req, res)) return;
   try {
-    const [campaigns, group] = await Promise.all([getEmailCampaigns(20).catch(() => []), getGroupStats().catch(() => null)]);
+    const cfg = await getChannelConfig(ch(req));
+    const [campaigns, group] = await Promise.all([
+      getEmailCampaigns(20, cfg.mailerliteApiKey).catch(() => []),
+      getGroupStats(cfg.mailerliteGroupId, cfg.mailerliteApiKey).catch(() => null),
+    ]);
     res.json({ campaigns, group });
   } catch (err) { console.error('[Dashboard] Emails error:', err); res.status(500).json({ error: 'Failed' }); }
 });

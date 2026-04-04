@@ -84,6 +84,62 @@ export function getConfigForDisplay(): Array<{ key: string; value: string; maske
   });
 }
 
+// Per-channel config resolution: channel-specific value → global config fallback
+export interface ChannelConfig {
+  mailerliteApiKey: string;
+  mailerliteGroupId: string;
+  youtubeApiKey: string;
+  youtubeChannelId: string;
+  stripeProductIds: string[];
+}
+
+const channelConfigCache = new Map<string, { data: ChannelConfig; expires: number }>();
+
+export async function getChannelConfig(channelId?: string): Promise<ChannelConfig> {
+  const id = channelId || 'default';
+
+  // Default channel = global config
+  if (id === 'default') {
+    return {
+      mailerliteApiKey: config.mailerlite.apiKey,
+      mailerliteGroupId: config.mailerlite.groupId,
+      youtubeApiKey: config.youtube.apiKey,
+      youtubeChannelId: config.youtube.channelId,
+      stripeProductIds: config.stripe.productIds,
+    };
+  }
+
+  // Check cache (60s TTL)
+  const cached = channelConfigCache.get(id);
+  if (cached && Date.now() < cached.expires) return cached.data;
+
+  // Load channel from DB
+  try {
+    const { getChannel } = await import('./db/queries');
+    const ch = await getChannel(id);
+    if (!ch) {
+      // Channel not found, return global
+      return getChannelConfig('default');
+    }
+
+    const cfg: ChannelConfig = {
+      mailerliteApiKey: ch.mailerlite_api_key || config.mailerlite.apiKey,
+      mailerliteGroupId: ch.mailerlite_group_id || config.mailerlite.groupId,
+      youtubeApiKey: ch.youtube_api_key || config.youtube.apiKey,
+      youtubeChannelId: ch.youtube_channel_id || config.youtube.channelId,
+      stripeProductIds: ch.stripe_product_ids
+        ? ch.stripe_product_ids.split(',').map((s: string) => s.trim()).filter(Boolean)
+        : config.stripe.productIds,
+    };
+
+    channelConfigCache.set(id, { data: cfg, expires: Date.now() + 60000 });
+    return cfg;
+  } catch (err) {
+    console.warn(`[Config] Failed to load channel config for ${id}, using global:`, err);
+    return getChannelConfig('default');
+  }
+}
+
 function getEnvForKey(key: string): string {
   switch (key) {
     case 'MAILERLITE_API_KEY': return process.env.MAILERLITE_API_KEY || '';

@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import Stripe from 'stripe';
-import { config } from '../config';
-import { insertPurchase, insertRefund, getSubscriberByEmail, getLatestEmailSource, getLatestPageviewUtms } from '../db/queries';
+import { config, getChannelConfig } from '../config';
+import { insertPurchase, insertRefund, getSubscriberByEmail, getLatestEmailSource, getLatestPageviewUtms, getChannels } from '../db/queries';
 
 const router = Router();
 
@@ -23,53 +23,63 @@ function verifyWebhook(req: Request): Stripe.Event | null {
   }
 }
 
-// Check if a checkout session contains one of our tracked products
-async function isTrackedProduct(session: Stripe.Checkout.Session): Promise<boolean> {
-  // If no product IDs configured, track everything (backwards compatible)
-  if (config.stripe.productIds.length === 0) return true;
-
+// Find which channel a checkout session belongs to by matching product IDs
+async function findChannelForSession(session: Stripe.Checkout.Session): Promise<string | null> {
   try {
     const stripe = getStripe();
     const lineItems = await stripe.checkout.sessions.listLineItems(session.id, { limit: 20 });
+    const sessionProductIds = lineItems.data.map(item => {
+      return typeof item.price?.product === 'string' ? item.price.product : item.price?.product?.id;
+    }).filter(Boolean) as string[];
 
-    for (const item of lineItems.data) {
-      const productId = typeof item.price?.product === 'string'
-        ? item.price.product
-        : item.price?.product?.id;
+    if (sessionProductIds.length === 0) return null;
 
-      if (productId && config.stripe.productIds.includes(productId)) {
-        return true;
+    // Check each channel's product IDs
+    const channels = await getChannels();
+    for (const ch of channels) {
+      if (!ch.stripe_product_ids) continue;
+      const channelProducts = ch.stripe_product_ids.split(',').map((s: string) => s.trim()).filter(Boolean);
+      if (channelProducts.length === 0) continue;
+      for (const pid of sessionProductIds) {
+        if (channelProducts.includes(pid)) {
+          console.log(`[Stripe] Matched product ${pid} to channel "${ch.id}"`);
+          return ch.id;
+        }
       }
     }
 
-    console.log(`[Stripe] Session ${session.id} skipped — no matching product IDs (found: ${lineItems.data.map(i => typeof i.price?.product === 'string' ? i.price.product : i.price?.product?.id).join(', ')})`);
-    return false;
+    // Fallback: check global product IDs
+    if (config.stripe.productIds.length === 0) {
+      // No product filtering at all — track under 'default'
+      return 'default';
+    }
+    for (const pid of sessionProductIds) {
+      if (config.stripe.productIds.includes(pid)) return 'default';
+    }
+
+    console.log(`[Stripe] Session ${session.id} skipped — no matching product IDs (found: ${sessionProductIds.join(', ')})`);
+    return null;
   } catch (err) {
     console.error('[Stripe] Failed to check line items:', err);
-    // If we can't check, default to NOT tracking (safer for shared accounts)
-    return false;
+    return null;
   }
 }
 
-// Check if a charge belongs to a tracked product (for refunds)
-async function isTrackedCharge(charge: Stripe.Charge): Promise<boolean> {
-  if (config.stripe.productIds.length === 0) return true;
-
+// Find channel for a charge (refunds)
+async function findChannelForCharge(charge: Stripe.Charge): Promise<string | null> {
   try {
     const stripe = getStripe();
-    // Get the payment intent to find the checkout session
     if (charge.payment_intent) {
       const piId = typeof charge.payment_intent === 'string' ? charge.payment_intent : charge.payment_intent.id;
-      // Search for checkout sessions with this payment intent
       const sessions = await stripe.checkout.sessions.list({ payment_intent: piId, limit: 1 });
       if (sessions.data.length > 0) {
-        return isTrackedProduct(sessions.data[0]);
+        return findChannelForSession(sessions.data[0]);
       }
     }
-    return false;
+    return null;
   } catch (err) {
     console.error('[Stripe] Failed to check charge product:', err);
-    return false;
+    return null;
   }
 }
 
@@ -89,9 +99,9 @@ router.post('/stripe', async (req: Request, res: Response) => {
     const currency = session.currency || 'usd';
 
     if (email) {
-      // Check if this is one of our products
-      const tracked = await isTrackedProduct(session);
-      if (!tracked) {
+      // Find which channel this purchase belongs to
+      const channelId = await findChannelForSession(session);
+      if (!channelId) {
         console.log(`[Stripe] Ignoring purchase from ${email} — not a tracked product`);
         res.json({ received: true });
         return;
@@ -99,10 +109,9 @@ router.post('/stripe', async (req: Request, res: Response) => {
 
       // Attribution: try multiple methods to identify the visitor
       const subscriber = await getSubscriberByEmail(email);
-      const clientRefId = (session as any).client_reference_id as string | null; // visitor_id passed from Lovable checkout
+      const clientRefId = (session as any).client_reference_id as string | null;
       const visitorId = clientRefId || subscriber?.visitor_id || null;
 
-      // Look up UTMs from visitor's pageviews (works even if Stripe email ≠ opt-in email)
       let utmCampaign = subscriber?.utm_campaign || undefined;
       let utmSource = subscriber?.utm_source || undefined;
       if (!utmCampaign && visitorId) {
@@ -111,7 +120,6 @@ router.post('/stripe', async (req: Request, res: Response) => {
         utmSource = utms?.utm_source || undefined;
       }
 
-      // Look up which email in the sequence triggered this purchase
       let emailSource: string | undefined;
       if (visitorId) {
         emailSource = (await getLatestEmailSource(visitorId)) || undefined;
@@ -126,8 +134,9 @@ router.post('/stripe', async (req: Request, res: Response) => {
         utm_source: utmSource,
         purchased_at: new Date(session.created * 1000).toISOString(),
         email_source: emailSource,
+        channel_id: channelId,
       });
-      console.log(`[Stripe] Purchase recorded: ${email} | $${(amount / 100).toFixed(2)} | campaign=${utmCampaign || 'unknown'} | visitor=${visitorId || 'none'} | email_source=${emailSource || 'direct'}`);
+      console.log(`[Stripe] Purchase recorded: ${email} | $${(amount / 100).toFixed(2)} | channel=${channelId} | campaign=${utmCampaign || 'unknown'}`);
     }
   }
 
@@ -139,8 +148,8 @@ router.post('/stripe', async (req: Request, res: Response) => {
     const currency = charge.currency || 'usd';
 
     if (email) {
-      const tracked = await isTrackedCharge(charge);
-      if (!tracked) {
+      const channelId = await findChannelForCharge(charge);
+      if (!channelId) {
         console.log(`[Stripe] Ignoring refund for ${email} — not a tracked product`);
         res.json({ received: true });
         return;
@@ -152,8 +161,9 @@ router.post('/stripe', async (req: Request, res: Response) => {
         currency,
         stripe_charge_id: charge.id,
         refunded_at: new Date().toISOString(),
+        channel_id: channelId,
       });
-      console.log(`[Stripe] Refund recorded: ${email} | $${(refundedAmount / 100).toFixed(2)}`);
+      console.log(`[Stripe] Refund recorded: ${email} | $${(refundedAmount / 100).toFixed(2)} | channel=${channelId}`);
     }
   }
 

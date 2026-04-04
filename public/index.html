@@ -616,25 +616,58 @@ function cpG(){cp(document.getElementById('uu').textContent,document.getElementB
 // ============ SETTINGS ============
 async function pSt(){
   document.getElementById('app').innerHTML=sh('<div class="ld">Loading settings...</div>');
-  try{const d=await af('/api/dashboard/settings');rSt(d)}catch(e){if(e.message!=='auth')document.querySelector('.mn').innerHTML=`<div class="er">${e.message}</div>`}
+  try{
+    const[settings,chData]=await Promise.all([
+      af('/api/dashboard/settings'),
+      CH!=='default'?af('/api/dashboard/channels/'+CH):Promise.resolve(null),
+    ]);
+    rSt(settings,chData);
+  }catch(e){if(e.message!=='auth')document.querySelector('.mn').innerHTML=`<div class="er">${e.message}</div>`}
 }
-async function rSt(settings){
+async function rSt(settings,chData){
+  // Per-channel config section (shown when non-default channel selected)
+  let channelCfg='';
+  if(CH!=='default'&&chData){
+    const chFields=[
+      {key:'mailerlite_group_id',label:'MailerLite Group ID',desc:'The group where this channel\'s subscribers go',sensitive:false},
+      {key:'youtube_channel_id',label:'YouTube Channel ID',desc:'Starts with UC...',sensitive:false},
+      {key:'stripe_product_ids',label:'Stripe Product IDs',desc:'Comma-separated product IDs for this channel',sensitive:false},
+      {key:'opt_in_url',label:'Opt-in Page URL',desc:'e.g. shinnsecrets.com',sensitive:false},
+    ];
+    const chRows=chFields.map(f=>{
+      const val=chData[f.key]||'';
+      return`<div style="padding:12px 16px;border-bottom:1px solid var(--bd)">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+          <span style="font-size:12px;font-weight:600">${f.label}</span>
+          <button class="btn" onclick="saveChField('${f.key}')">Save</button>
+        </div>
+        <div style="font-size:10px;color:var(--t3);margin-bottom:4px">${f.desc}</div>
+        <input id="chf_${f.key}" type="${f.sensitive?'password':'text'}" value="${val}" placeholder="Uses global default if empty"
+          style="width:100%;padding:8px 12px;border-radius:7px;border:1px solid var(--bd);background:var(--bg);color:var(--t1);font-size:12px;font-family:monospace"/>
+      </div>`;
+    }).join('');
+    const chName=channelList.find(c=>c.id===CH)?.name||CH;
+    channelCfg=`<div class="tc" style="margin-bottom:24px"><h3 style="color:var(--blue)">Channel: ${chName}</h3>
+      <div style="font-size:11px;color:var(--t3);padding:0 16px 8px">These settings override the global defaults for this channel only. Leave empty to use the global value.</div>
+      ${chRows}</div>`;
+  }
+
+  // Global settings (always shown)
   const labels={
     'MAILERLITE_API_KEY':'MailerLite API Key',
-    'MAILERLITE_GROUP_ID':'MailerLite Group ID',
+    'MAILERLITE_GROUP_ID':'MailerLite Group ID (default)',
     'STRIPE_SECRET_KEY':'Stripe Secret Key',
     'STRIPE_WEBHOOK_SECRET':'Stripe Webhook Secret',
-    'STRIPE_PRODUCT_IDS':'Stripe Product IDs (comma-separated)',
+    'STRIPE_PRODUCT_IDS':'Stripe Product IDs (default)',
     'YOUTUBE_API_KEY':'YouTube API Key',
-    'YOUTUBE_CHANNEL_ID':'YouTube Channel ID',
+    'YOUTUBE_CHANNEL_ID':'YouTube Channel ID (default)',
     'DASHBOARD_SECRET':'Dashboard Password',
-    'OPT_IN_URL':'Opt-in Page URL',
+    'OPT_IN_URL':'Opt-in Page URL (default)',
   };
   const descs={
-    'STRIPE_PRODUCT_IDS':'Only track purchases for these products. Get IDs from Stripe → Products. Separate multiple with commas.',
-    'MAILERLITE_GROUP_ID':'The group ID where new subscribers are added.',
-    'YOUTUBE_CHANNEL_ID':'Starts with UC... — find it on your YouTube channel page.',
-    'OPT_IN_URL':'Your landing page URL (e.g. goddardsecrets.com)',
+    'STRIPE_PRODUCT_IDS':'Default product IDs. Channels can override with their own.',
+    'MAILERLITE_GROUP_ID':'Default group. Channels can override with their own.',
+    'YOUTUBE_CHANNEL_ID':'Default YouTube channel. Channels can override.',
   };
   const isSensitive=k=>k.includes('KEY')||k.includes('SECRET')||k.includes('TOKEN');
 
@@ -658,8 +691,11 @@ async function rSt(settings){
 
   document.querySelector('.mn').innerHTML=`
     <div class="ph"><h1>Settings</h1><button class="btn" onclick="go('settings')">Refresh</button></div>
-    <div style="font-size:12px;color:var(--t3);margin-bottom:16px">Configure API keys and product IDs. Settings saved here override Vercel environment variables.</div>
-    <div class="card" style="padding:0;overflow:hidden">${rows}</div>
+    ${channelCfg}
+    <div class="tc"><h3>Global Settings</h3>
+      <div style="font-size:11px;color:var(--t3);padding:0 16px 8px">Default values used when a channel doesn't have its own config.</div>
+      ${rows}
+    </div>
     ${chMgr}`;
 }
 async function saveSetting(key){
@@ -670,8 +706,17 @@ async function saveSetting(key){
     await fetch(qs(A+'/api/dashboard/settings'),{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({key,value:val})});
     input.style.borderColor='var(--green)';
     setTimeout(()=>{input.style.borderColor='var(--bd)'},1500);
-    // Refresh to show updated source
     pSt();
+  }catch(e){alert('Failed to save: '+e.message)}
+}
+async function saveChField(key){
+  const input=document.getElementById('chf_'+key);
+  const val=input.value.trim();
+  try{
+    const body={id:CH};body[key]=val;
+    await fetch(qs(A+'/api/dashboard/channels'),{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    input.style.borderColor='var(--green)';
+    setTimeout(()=>{input.style.borderColor='var(--bd)'},1500);
   }catch(e){alert('Failed to save: '+e.message)}
 }
 
