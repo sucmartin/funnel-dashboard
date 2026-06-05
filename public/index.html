@@ -595,7 +595,7 @@ function rAc(d){
 }
 
 // ============ UTM LINKS ============
-const SITE='https://goddardsecrets.com/';
+const DESTINATIONS=[{label:'Sales page: getsourcecode.co',url:'https://getsourcecode.co/'},{label:'Funnel / opt-in: goddardsecrets.com',url:'https://goddardsecrets.com/'}];
 function gH(){try{return JSON.parse(localStorage.getItem('uh')||'[]')}catch{return[]}}
 function sH(h){localStorage.setItem('uh',JSON.stringify(h.slice(0,25)))}
 function pLn(){
@@ -603,6 +603,7 @@ function pLn(){
   const hh=h.length>0?h.map(x=>`<div class="hi"><span class="hc">${x.c}</span><span class="hl">${x.u}</span><button class="btn" style="padding:2px 8px;font-size:10px" onclick="cp('${x.u}',this)">Copy</button></div>`).join(''):'<div style="color:var(--t3);font-size:12px;padding:6px 0">No links yet</div>';
   document.getElementById('app').innerHTML=sh(`<div class="ph"><h1>UTM Link Generator</h1></div>
   <div class="card fg" style="max-width:520px">
+    <label>Destination</label><select id="ud" onchange="uP()">${DESTINATIONS.map(d=>`<option value="${d.url}">${d.label}</option>`).join('')}</select>
     <label>Campaign Name</label><input type="text" id="uc" placeholder="e.g. revision-technique" oninput="uP()"/>
     <label>Source</label><select id="us" onchange="uP()"><option value="youtube">YouTube</option><option value="instagram">Instagram</option><option value="tiktok">TikTok</option><option value="twitter">Twitter / X</option><option value="facebook">Facebook</option><option value="email">Email</option></select>
     <label>Medium</label><select id="um" onchange="uP()"><option value="">Auto</option><option value="organic">Organic</option><option value="paid">Paid</option><option value="description">Video description</option></select>
@@ -610,7 +611,7 @@ function pLn(){
   </div>
   <div style="max-width:520px;margin-top:20px"><h3 style="font-size:12px;color:var(--t2);margin-bottom:6px">Recent Links</h3>${hh}</div>`);
 }
-function uP(){const c=document.getElementById('uc').value.trim().toLowerCase().replace(/[^a-z0-9-]/g,'-').replace(/-+/g,'-');const s=document.getElementById('us').value;const m=document.getElementById('um').value;if(!c){document.getElementById('uo').style.display='none';return}let u=SITE+'?utm_source='+s+'&utm_campaign='+c;if(m)u+='&utm_medium='+m;document.getElementById('uu').textContent=u;document.getElementById('uo').style.display='block';const h=gH();if(!h.find(x=>x.u===u)){h.unshift({c,s,u,t:Date.now()});sH(h)}}
+function uP(){const base=document.getElementById('ud').value;const c=document.getElementById('uc').value.trim().toLowerCase().replace(/[^a-z0-9-]/g,'-').replace(/-+/g,'-');const s=document.getElementById('us').value;const m=document.getElementById('um').value;if(!c){document.getElementById('uo').style.display='none';return}let u=base+'?utm_source='+s+'&utm_campaign='+c;if(m)u+='&utm_medium='+m;document.getElementById('uu').textContent=u;document.getElementById('uo').style.display='block';const h=gH();if(!h.find(x=>x.u===u)){h.unshift({c,s,u,t:Date.now()});sH(h)}}
 function cpG(){cp(document.getElementById('uu').textContent,document.getElementById('ucb'))}
 
 // ============ SETTINGS ============
