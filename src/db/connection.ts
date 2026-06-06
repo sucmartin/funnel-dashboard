@@ -38,6 +38,7 @@ CREATE TABLE IF NOT EXISTS pageviews (
     utm_campaign TEXT,
     utm_medium TEXT,
     referrer TEXT,
+    host TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -129,6 +130,13 @@ const MIGRATIONS = [
   // Email-level purchase attribution
   `ALTER TABLE pageviews ADD COLUMN email_source TEXT`,
   `ALTER TABLE purchases ADD COLUMN email_source TEXT`,
+  // Track origin domain so a cross-channel report can filter to getsourcecode.co traffic
+  `ALTER TABLE pageviews ADD COLUMN host TEXT`,
+];
+
+const POST_INIT_INDEXES = [
+  // Cross-channel sales-page report needs to scan pageviews by host
+  `CREATE INDEX IF NOT EXISTS idx_pageviews_host ON pageviews(host)`,
 ];
 
 export async function ensureSchema(): Promise<void> {
@@ -155,6 +163,11 @@ export async function ensureSchema(): Promise<void> {
   const tables = ['pageviews', 'events', 'subscribers', 'purchases', 'campaign_costs', 'refunds'];
   for (const table of tables) {
     try { await db.execute(`UPDATE ${table} SET channel_id = 'default' WHERE channel_id IS NULL`); } catch (_) {}
+  }
+
+  // Indexes that depend on migration-added columns must run after the migrations
+  for (const stmt of POST_INIT_INDEXES) {
+    try { await db.execute(stmt); } catch (_) {}
   }
 
   initialized = true;

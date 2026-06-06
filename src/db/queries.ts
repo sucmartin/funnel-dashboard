@@ -80,13 +80,13 @@ export async function deleteChannel(id: string) {
 export async function insertPageview(data: {
   page: string; visitor_id: string;
   utm_source?: string; utm_campaign?: string; utm_medium?: string; referrer?: string;
-  channel_id?: string; email_source?: string;
+  channel_id?: string; email_source?: string; host?: string;
 }) {
   await ensureSchema();
   const db = getDb();
   await db.execute({
-    sql: `INSERT INTO pageviews (channel_id, page, visitor_id, utm_source, utm_campaign, utm_medium, referrer, email_source) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-    args: [data.channel_id || DC, data.page, data.visitor_id, data.utm_source||null, data.utm_campaign||null, data.utm_medium||null, data.referrer||null, data.email_source||null],
+    sql: `INSERT INTO pageviews (channel_id, page, visitor_id, utm_source, utm_campaign, utm_medium, referrer, email_source, host) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    args: [data.channel_id || DC, data.page, data.visitor_id, data.utm_source||null, data.utm_campaign||null, data.utm_medium||null, data.referrer||null, data.email_source||null, data.host||null],
   });
 }
 
@@ -249,6 +249,83 @@ export async function getCampaignBreakdown(ch = DC, dr?: DateRange) {
     .map(c => ({
       ...c,
       conversionRate: c.subscribers > 0 ? ((c.buyers / c.subscribers) * 100).toFixed(1) + '%' : '0%',
+    }));
+}
+
+// Cross-channel report: every UTM link that drove traffic to a given host (e.g.
+// getsourcecode.co), pooled across ALL channels. Used by the Sales Page tab to
+// answer "which link sent the most traffic and revenue to the offer." Channel
+// column is preserved so a row whose source funnel is Florence vs Goddard is
+// still attributable. Revenue is joined by (source, campaign) tuple, so the
+// channel filter on purchases is intentionally absent — that's the whole point.
+export async function getSalesPageLinks(host: string, dr?: DateRange) {
+  await ensureSchema();
+  const db = getDb();
+  const dPv = dateFilter('created_at', dr);
+  const dPur = dateFilter('purchased_at', dr);
+
+  const [pvResult, purResult] = await Promise.all([
+    db.execute({
+      sql: `SELECT
+              COALESCE(NULLIF(utm_source,''), 'direct')   as source,
+              COALESCE(NULLIF(utm_campaign,''), '(none)') as campaign,
+              COALESCE(NULLIF(channel_id,''), 'default')  as channel,
+              COUNT(DISTINCT visitor_id) as views
+            FROM pageviews
+            WHERE host = ? ${dPv}
+            GROUP BY source, campaign, channel`,
+      args: [host],
+    }),
+    db.execute({
+      sql: `SELECT
+              COALESCE(NULLIF(utm_source,''), 'direct')   as source,
+              COALESCE(NULLIF(utm_campaign,''), '(none)') as campaign,
+              COALESCE(NULLIF(channel_id,''), 'default')  as channel,
+              COUNT(*)                       as sales,
+              COALESCE(SUM(amount_cents), 0) as revenue_cents
+            FROM purchases
+            WHERE 1=1 ${dPur}
+            GROUP BY source, campaign, channel`,
+      args: [],
+    }),
+  ]);
+
+  // Merge by (source, campaign, channel) so a Florence link and a Goddard link with
+  // identical source/campaign stay separate rows.
+  const map = new Map<string, any>();
+  const key = (s: string, c: string, ch: string) => `${s}|${c}|${ch}`;
+  for (const row of pvResult.rows) {
+    const k = key(row.source as string, row.campaign as string, row.channel as string);
+    map.set(k, {
+      source: row.source as string,
+      campaign: row.campaign as string,
+      channel: row.channel as string,
+      views: Number(row.views),
+      sales: 0,
+      revenue: 0,
+    });
+  }
+  for (const row of purResult.rows) {
+    const k = key(row.source as string, row.campaign as string, row.channel as string);
+    const existing = map.get(k) || {
+      source: row.source as string,
+      campaign: row.campaign as string,
+      channel: row.channel as string,
+      views: 0,
+      sales: 0,
+      revenue: 0,
+    };
+    existing.sales = Number(row.sales);
+    existing.revenue = Number(row.revenue_cents) / 100;
+    map.set(k, existing);
+  }
+
+  return Array.from(map.values())
+    .sort((a, b) => (b.revenue - a.revenue) || (b.views - a.views))
+    .map(r => ({
+      ...r,
+      conversionRate: r.views > 0 ? +((r.sales / r.views) * 100).toFixed(2) : 0,
+      revenuePerView: r.views > 0 ? +(r.revenue / r.views).toFixed(2) : 0,
     }));
 }
 

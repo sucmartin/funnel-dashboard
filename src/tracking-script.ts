@@ -3,9 +3,16 @@
 
 export const TRACKING_SCRIPT = `"use strict";(function(){
 var u=document.currentScript?document.currentScript.getAttribute("data-api"):"";
-var chId=document.currentScript?document.currentScript.getAttribute("data-channel"):"";
-if(!u){var scripts=document.querySelectorAll("script[data-api]");for(var idx=0;idx<scripts.length;idx++){var val=scripts[idx].getAttribute("data-api");if(val){u=val;if(!chId)chId=scripts[idx].getAttribute("data-channel")||"";break}}}
+var attrCh=document.currentScript?document.currentScript.getAttribute("data-channel"):"";
+if(!u){var scripts=document.querySelectorAll("script[data-api]");for(var idx=0;idx<scripts.length;idx++){var val=scripts[idx].getAttribute("data-api");if(val){u=val;if(!attrCh)attrCh=scripts[idx].getAttribute("data-channel")||"";break}}}
 if(!u){console.warn("[FunnelTracker] No data-api attribute found. Tracking disabled.");return}
+
+/* Channel resolution priority: ?ch= URL param > sessionStorage > data-channel attribute.
+   URL param wins so a single shared page (getsourcecode.co) can route to different channels
+   based on the inbound link. SessionStorage persists across in-site navigation. */
+var urlCh=new URLSearchParams(window.location.search).get("ch");
+if(urlCh){sessionStorage.setItem("_fv_ch",urlCh)}
+var chId=urlCh||sessionStorage.getItem("_fv_ch")||attrCh||"";
 
 function uuid(){return"xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g,function(n){var t=Math.random()*16|0;return(n==="x"?t:t&3|8).toString(16)})}
 function getCookie(n){var t=document.cookie.match(new RegExp("(?:^|; )"+n+"=([^;]*)"));return t?decodeURIComponent(t[1]):null}
@@ -40,7 +47,7 @@ function detectPage(){
 }
 
 var utms=getUtms();
-var pvData={visitor_id:vid,page:detectPage(),utm_source:utms.utm_source,utm_campaign:utms.utm_campaign,utm_medium:utms.utm_medium,referrer:document.referrer||undefined};
+var pvData={visitor_id:vid,page:detectPage(),utm_source:utms.utm_source,utm_campaign:utms.utm_campaign,utm_medium:utms.utm_medium,referrer:document.referrer||undefined,host:window.location.hostname||undefined};
 if(chId)pvData.channel_id=chId;
 if((utms.utm_source==="email"||utms.utm_source==="mailerlite")&&utms.utm_campaign){pvData.email_source=utms.utm_campaign;sessionStorage.setItem("_fv_email_src",utms.utm_campaign)}
 else{var es=sessionStorage.getItem("_fv_email_src");if(es)pvData.email_source=es}

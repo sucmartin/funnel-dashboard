@@ -8,6 +8,7 @@ import {
   getVSLStats, getCheckoutStats, getFunnelFlow,
   getRevenueByEmail, getRevenueByFlow, getCustomerLTV, getAverageLTV, getPreviousDateRange,
   setSetting, getChannels, getChannel, upsertChannel, deleteChannel,
+  getSalesPageLinks,
   type DateRange,
 } from '../db/queries';
 import { getRecentVideos, getChannelStats, getAllVideos } from '../services/youtube';
@@ -106,6 +107,16 @@ router.get('/campaigns', async (req: Request, res: Response) => {
   if (!checkAuth(req, res)) return;
   try { res.json(await getCampaignBreakdown(ch(req))); }
   catch (err) { console.error('[Dashboard] Campaigns error:', err); res.status(500).json({ error: 'Failed' }); }
+});
+
+// Cross-channel: every UTM link that drove traffic to the sales page (getsourcecode.co
+// by default), pooled across ALL channels. Ignores the active channel filter on purpose.
+router.get('/sales-page-links', async (req: Request, res: Response) => {
+  if (!checkAuth(req, res)) return;
+  try {
+    const host = (req.query.host as string) || 'getsourcecode.co';
+    res.json(await getSalesPageLinks(host, dr(req)));
+  } catch (err) { console.error('[Dashboard] Sales page links error:', err); res.status(500).json({ error: 'Failed' }); }
 });
 
 router.get('/activity', async (req: Request, res: Response) => {

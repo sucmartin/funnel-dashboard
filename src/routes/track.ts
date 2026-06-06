@@ -36,6 +36,7 @@ const pageviewSchema = z.object({
   referrer: z.string().optional(),
   channel_id: z.string().optional(),
   email_source: z.string().optional(),
+  host: z.string().max(255).optional(),
 });
 
 const eventSchema = z.object({

@@ -134,8 +134,9 @@ router.post('/stripe', async (req: Request, res: Response) => {
 
       // getsourcecode.co tags its sales in metadata. Trust that first — the $297/$197
       // offers have no Stripe Price object, so product-ID matching can't identify them.
-      let channelId: string | null =
-        (md.product === 'the-source-code' || md.bridge === 'true') ? 'default' : null;
+      // If the link carried &ch=<channel>, that's the funnel attribution.
+      let channelId: string | null = md.ch || null;
+      if (!channelId && (md.product === 'the-source-code' || md.bridge === 'true')) channelId = 'default';
       if (!channelId) channelId = await findChannelForSession(session);
       if (!channelId) {
         console.log(`[Stripe] Ignoring purchase from ${email} — not a tracked product`);
@@ -192,6 +193,10 @@ router.post('/stripe', async (req: Request, res: Response) => {
         let emailSource = attr.email_source;
         if (!emailSource && visitorId) emailSource = (await getLatestEmailSource(visitorId)) || undefined;
 
+        // &ch=<channel> on the inbound link → routed into Stripe metadata at checkout.
+        // Default to 'default' (Goddard) when absent for backward compatibility.
+        const channelId = md.ch || 'default';
+
         await insertPurchase({
           email,
           amount_cents: amount,
@@ -201,9 +206,9 @@ router.post('/stripe', async (req: Request, res: Response) => {
           utm_source: utmSource,
           purchased_at: new Date(pi.created * 1000).toISOString(),
           email_source: emailSource,
-          channel_id: 'default',
+          channel_id: channelId,
         });
-        console.log(`[Stripe] PaymentIntent purchase recorded: ${email} | $${(amount / 100).toFixed(2)} | channel=default | campaign=${utmCampaign || 'unknown'}`);
+        console.log(`[Stripe] PaymentIntent purchase recorded: ${email} | $${(amount / 100).toFixed(2)} | channel=${channelId} | campaign=${utmCampaign || 'unknown'}`);
       }
     }
   }
