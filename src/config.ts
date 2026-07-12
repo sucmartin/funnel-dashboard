@@ -61,6 +61,15 @@ export async function reloadConfigFromDB(): Promise<void> {
   }
 }
 
+// Reload config if the cache is older than maxAgeMs.
+// Serverless-friendly: lets warm instances pick up settings changes (e.g. a new
+// dashboard password) without needing a redeploy or cold start.
+export async function ensureConfigFresh(maxAgeMs = 30_000): Promise<void> {
+  if (Date.now() - lastLoaded > maxAgeMs) {
+    await reloadConfigFromDB();
+  }
+}
+
 // Mask sensitive values for display
 export function maskValue(value: string): string {
   if (!value || value.length < 8) return '••••••••';
