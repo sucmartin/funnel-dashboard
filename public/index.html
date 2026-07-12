@@ -106,7 +106,7 @@ async function af(p){const r=await fetch(qs(`${A}${p}`));if(r.status===401){show
 async function loadChannels(){try{channelList=await af('/api/dashboard/channels')}catch(e){channelList=[{id:'default',name:'Default Channel'}];if(e.message==='auth')return}}
 function switchChannel(id){CH=id;localStorage.setItem('ft_channel',id);go(T)}
 function showAuth(){document.getElementById('app').innerHTML=`<div class="af"><h2>FunnelTrack</h2><input type="password" id="si" placeholder="Enter secret" autofocus /><button class="btn btn-p" onclick="doA()">Unlock</button></div>`;document.getElementById('si').addEventListener('keydown',e=>{if(e.key==='Enter')doA()})}
-function doA(){S=document.getElementById('si').value;localStorage.setItem('ds',S);go('overview')}
+async function doA(){S=document.getElementById('si').value;localStorage.setItem('ds',S);await loadChannels();go('overview')}
 
 const I={
   ov:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>',
